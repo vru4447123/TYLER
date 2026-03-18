@@ -42,11 +42,13 @@ async function loadDB() {
     if (!_cache.codeChannel)  _cache.codeChannel  = null;
     if (!_cache.redeems)      _cache.redeems      = {};
     if (!_cache.redeemCounter)_cache.redeemCounter= 1;
+    if (!_cache.invites)      _cache.invites      = {};
+    if (!_cache.hasJoined)    _cache.hasJoined    = {};
   } catch (err) {
     console.error('JSONBin load failed:', err.message);
     _cache = {
       users: {}, warnings: {}, codes: {}, shopItems: [],
-      stockMessages: {}, codeChannel: null, redeems: {}, redeemCounter: 1,
+      stockMessages: {}, codeChannel: null, redeems: {}, redeemCounter: 1, invites: {}, hasJoined: {},
     };
   }
   return _cache;
@@ -286,6 +288,28 @@ function isVerified(member) {
   if (!member) return false;
   return member.roles.cache.some(r => stripRole(r.name) === 'verified');
 }
+async function guardDebt(i) {
+  const user = await getUser(i.user.id, i.user.username);
+  if (user.balance < 0) {
+    await i.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0xff0000)
+        .setTitle('🔒 Account Locked — You Are in Debt!')
+        .setDescription(
+          `Your balance is ${COIN} **${user.balance.toLocaleString()} Coins** (negative).\n\n` +
+          `Your shop, inventory and purchases are **locked** until you get out of debt.\n\n` +
+          `**How to get out of debt:**\n` +
+          `• Invite new members to the server — each valid invite gives you **+100 Coins**\n` +
+          `• Send messages to earn **1 Coin** per message\n` +
+          `• Use \`/daily\` for **+100 Coins** every 24h`
+        )],
+      flags: MessageFlags.Ephemeral,
+    });
+    return false;
+  }
+  return true;
+}
+
 async function guardAdmin(i) {
   if (!isAdmin(i.member)) {
     await i.reply({ embeds: [new EmbedBuilder().setColor(0xff4444).setTitle('🚫 Access Denied')
@@ -461,6 +485,7 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildModeration,
+    GatewayIntentBits.GuildInvites,
   ],
 });
 
@@ -489,6 +514,183 @@ async function registerCommands() {
   }
   console.log('✅ All commands registered fresh!');
 }
+
+// ══════════════════════════════════════════════════════════════════
+//  INVITE TRACKING
+// ══════════════════════════════════════════════════════════════════
+
+// Cache: guildId -> Map<inviteCode, { uses, inviterId }>
+const inviteCache = new Map();
+
+// Build cache for a guild
+async function buildInviteCache(guild) {
+  try {
+    const invites = await guild.invites.fetch();
+    const map = new Map();
+    invites.each(inv => map.set(inv.code, { uses: inv.uses, inviterId: inv.inviter?.id || null }));
+    inviteCache.set(guild.id, map);
+  } catch { /* no perms */ }
+}
+
+// When bot joins a new guild, cache it
+client.on('guildCreate', async guild => {
+  await buildInviteCache(guild);
+});
+
+// When a new invite is created, add it to cache
+client.on('inviteCreate', invite => {
+  const map = inviteCache.get(invite.guild.id) || new Map();
+  map.set(invite.code, { uses: invite.uses, inviterId: invite.inviter?.id || null });
+  inviteCache.set(invite.guild.id, map);
+});
+
+// When invite is deleted, remove from cache
+client.on('inviteDelete', invite => {
+  const map = inviteCache.get(invite.guild.id);
+  if (map) map.delete(invite.code);
+});
+
+// Member joins — figure out which invite was used
+client.on('guildMemberAdd', async member => {
+  const guild = member.guild;
+  const oldMap = inviteCache.get(guild.id) || new Map();
+
+  let usedInvite = null;
+  try {
+    const newInvites = await guild.invites.fetch();
+    newInvites.each(inv => {
+      const cached = oldMap.get(inv.code);
+      if (cached && inv.uses > cached.uses) {
+        usedInvite = inv;
+      }
+    });
+    // Rebuild cache with new counts
+    const newMap = new Map();
+    newInvites.each(inv => newMap.set(inv.code, { uses: inv.uses, inviterId: inv.inviter?.id || null }));
+    inviteCache.set(guild.id, newMap);
+  } catch { return; }
+
+  if (!usedInvite || !usedInvite.inviter) return;
+
+  const db = await loadDB();
+  if (!db.invites) db.invites = {};
+  if (!db.hasJoined) db.hasJoined = {};
+
+  const inviterId = usedInvite.inviter.id;
+  const inviterTag = usedInvite.inviter.tag;
+
+  // Check if this person has joined before (rejoin detection)
+  const hasJoinedBefore = db.hasJoined[member.id] === true;
+
+  if (hasJoinedBefore) {
+    // Rejoin — no coins, DM the person and the inviter
+    try {
+      await member.user.send({
+        embeds: [new EmbedBuilder()
+          .setColor(0xff8800)
+          .setTitle(`👋 Welcome Back to ${guild.name}!`)
+          .setDescription(
+            `You rejoined **${guild.name}** using **${inviterTag}**'s invite.\n\n` +
+            `⚠️ Since you've been in this server before, **no coins** were awarded to your inviter for this rejoin.`
+          )
+          .setThumbnail(guild.iconURL())],
+      });
+    } catch { /* DMs closed */ }
+
+    try {
+      const inviterUser = await client.users.fetch(inviterId);
+      await inviterUser.send({
+        embeds: [new EmbedBuilder()
+          .setColor(0xff8800)
+          .setTitle('⚠️ Rejoin — No Coins Awarded')
+          .setDescription(
+            `**${member.user.tag}** rejoined **${guild.name}** using your invite.\n\n` +
+            `Since they were already in this server before, **no coins** were awarded for this rejoin.`
+          )
+          .setThumbnail(member.user.displayAvatarURL())],
+      });
+    } catch { /* DMs closed */ }
+    return;
+  }
+
+  // First time join — award coins
+  db.hasJoined[member.id] = true;
+  db.invites[member.id] = { inviterId, guildId: guild.id };
+  await saveDB();
+
+  await dbAddCoins(inviterId, usedInvite.inviter.username, 100);
+  const inviterBal = (await getUser(inviterId)).balance;
+
+  // DM the inviter
+  try {
+    const inviterUser = await client.users.fetch(inviterId);
+    await inviterUser.send({
+      embeds: [new EmbedBuilder()
+        .setColor(0x00ff88)
+        .setTitle('🎉 Someone Joined Using Your Invite!')
+        .setDescription(
+          `**${member.user.tag}** just joined **${guild.name}** using your invite!\n\n` +
+          `${COIN} You earned **+100 Coins**\n` +
+          `💰 New balance: **${inviterBal.toLocaleString()} Coins**`
+        )
+        .setThumbnail(member.user.displayAvatarURL())],
+    });
+  } catch { /* DMs closed */ }
+
+  // DM the new member
+  try {
+    await member.user.send({
+      embeds: [new EmbedBuilder()
+        .setColor(0x00b4ff)
+        .setTitle(`👋 Welcome to ${guild.name}!`)
+        .setDescription(
+          `You were invited by **${inviterTag}**.\n\n` +
+          `Start earning coins by chatting, use \`/daily\` for free coins, and check \`/shop\` for items!\n\n` +
+          `Use \`/help\` to see all available commands.`
+        )
+        .setThumbnail(guild.iconURL())],
+    });
+  } catch { /* DMs closed */ }
+});
+// Member leaves — remove 100 coins from the inviter
+client.on('guildMemberRemove', async member => {
+  const db = await loadDB();
+  if (!db.invites) return;
+
+  const record = db.invites[member.id];
+  if (!record) return;
+
+  const inviterId = record.inviterId;
+
+  // Remove 100 coins (can go negative)
+  const inviterData = await getUser(inviterId);
+  inviterData.balance -= 100;
+  await saveUser(inviterId, inviterData);
+  const newBal = inviterData.balance;
+
+  // Remove the record
+  delete db.invites[member.id];
+  await saveDB();
+
+  // DM the inviter
+  try {
+    const inviterUser = await client.users.fetch(inviterId);
+    await inviterUser.send({
+      embeds: [new EmbedBuilder()
+        .setColor(0xff4444)
+        .setTitle('😔 Your Invite Left the Server')
+        .setDescription(
+          `**${member.user.tag}** just left **${member.guild.name}**.
+
+` +
+          `${COIN} You lost **-100 Coins**
+` +
+          `💰 New balance: **${newBal.toLocaleString()} Coins**${newBal < 0 ? ' ⚠️ (negative!)' : ''}`
+        )
+        .setThumbnail(member.user.displayAvatarURL())],
+    });
+  } catch { /* DMs closed */ }
+});
 
 // ══════════════════════════════════════════════════════════════════
 //  MESSAGE COUNTING  — 1 message = 1 coin
@@ -636,6 +838,7 @@ async function cmdPay(i) {
 // ══════════════════════════════════════════════════════════════════
 
 async function cmdCoinflip(i) {
+  if (!await guardDebt(i)) return;
   const side = i.options.getString('side');
   const bet  = i.options.getInteger('bet');
   const user = await getUser(i.user.id, i.user.username);
@@ -658,6 +861,7 @@ async function cmdCoinflip(i) {
 }
 
 async function cmdSlots(i) {
+  if (!await guardDebt(i)) return;
   const bet  = i.options.getInteger('bet');
   const user = await getUser(i.user.id, i.user.username);
   if (user.balance < bet)
@@ -697,6 +901,7 @@ async function cmdSlots(i) {
 const bjGames = new Map();
 
 async function cmdBlackjack(i) {
+  if (!await guardDebt(i)) return;
   const bet  = i.options.getInteger('bet');
   const user = await getUser(i.user.id, i.user.username);
   if (user.balance < bet)
@@ -814,6 +1019,7 @@ async function cmdShop(i) {
 }
 
 async function cmdBuy(i) {
+  if (!await guardDebt(i)) return;
   const input = i.options.getString('item').toLowerCase().trim();
   const pkg   = SHOP_PACKAGES.find(p => p.name.toLowerCase() === input);
   if (pkg) {
@@ -846,8 +1052,11 @@ async function cmdBuy(i) {
 }
 
 async function cmdInventory(i) {
-  const target = i.options.getUser('user') || i.user;
-  const inv    = await dbGetInventory(target.id);
+  const target   = i.options.getUser('user') || i.user;
+  const inv      = await dbGetInventory(target.id);
+  const userData = await getUser(target.id, target.username);
+  const inDebt   = userData.balance < 0;
+
   if (!inv.length) return i.reply({
     embeds: [new EmbedBuilder().setColor(0x7289da).setTitle(`🎒 ${target.username}'s Inventory`)
       .setDescription('Empty! Use `/shop` to browse.')],
@@ -855,14 +1064,16 @@ async function cmdInventory(i) {
   const grouped = {};
   inv.forEach(it => { grouped[it] = (grouped[it] || 0) + 1; });
   const desc = Object.entries(grouped).map(([n, q]) => `• **${n}** × ${q}`).join('\n');
-  return i.reply({
-    embeds: [new EmbedBuilder().setColor(0x7289da).setTitle(`🎒 ${target.username}'s Inventory`)
-      .setDescription(desc).setThumbnail(target.displayAvatarURL())
-      .setFooter({ text: `${inv.length} total items` })],
-  });
+  const embed = new EmbedBuilder().setColor(inDebt ? 0xff0000 : 0x7289da)
+    .setTitle(`🎒 ${target.username}'s Inventory${inDebt ? ' 🔒' : ''}`)
+    .setDescription(desc + (inDebt ? '\n\n🔒 **Inventory locked — account is in debt. Invite members to recover!**' : ''))
+    .setThumbnail(target.displayAvatarURL())
+    .setFooter({ text: `${inv.length} total items${inDebt ? ' • Locked until out of debt' : ''}` });
+  return i.reply({ embeds: [embed] });
 }
 
 async function cmdUse(i) {
+  if (!await guardDebt(i)) return;
   const input = i.options.getString('item').toLowerCase();
   const inv   = await dbGetInventory(i.user.id);
   const idx   = inv.findIndex(it => it.toLowerCase().includes(input));
@@ -2014,6 +2225,10 @@ client.once('clientReady', async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
   await loadDB(); // warm up cache
   await registerCommands();
+  // Cache all guild invites for tracking
+  for (const guild of client.guilds.cache.values()) {
+    await buildInviteCache(guild);
+  }
   client.user.setActivity('Coin Economy | /shop', { type: 3 });
   // Check code expiry every 30 seconds
   setInterval(checkCodeExpiry, 30 * 1000);
