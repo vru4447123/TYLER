@@ -5,8 +5,6 @@ const {
   ModalBuilder, TextInputBuilder, TextInputStyle,
   PermissionFlagsBits,
 } = require('discord.js');
-const fs   = require('fs');
-const path = require('path');
 require('dotenv').config();
 
 // ══════════════════════════════════════════════════════════════════
@@ -16,57 +14,116 @@ const COIN = '🪙';
 function fmt(n) { return `${COIN} **${Number(n).toLocaleString()} Coins**`; }
 
 // ══════════════════════════════════════════════════════════════════
-//  DATABASE  (flat JSON file)
+//  JSONBIN DATABASE
+//  Set these in Railway / .env:
+//    JSONBIN_BIN_ID   — the bin ID (after you create a bin)
+//    JSONBIN_API_KEY  — your JSONBin secret key ($2a$10$...)
 // ══════════════════════════════════════════════════════════════════
-const DB_PATH = path.join(__dirname, 'data.json');
+const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${process.env.JSONBIN_BIN_ID}`;
+const JSONBIN_HEADERS = {
+  'Content-Type': 'application/json',
+  'X-Master-Key': process.env.JSONBIN_API_KEY,
+  'X-Bin-Versioning': 'false',
+};
 
-function loadDB() {
-  if (!fs.existsSync(DB_PATH)) {
-    const blank = {
-      users: {}, warnings: {}, codes: {},
-      shopItems: [], stockMessages: {},
-      codeChannel: null, redeems: {}, redeemCounter: 1,
+let _cache = null;
+
+async function loadDB() {
+  if (_cache) return _cache;
+  try {
+    const res  = await fetch(JSONBIN_URL, { headers: JSONBIN_HEADERS });
+    const json = await res.json();
+    _cache = json.record || json;
+    if (!_cache.users)        _cache.users        = {};
+    if (!_cache.warnings)     _cache.warnings     = {};
+    if (!_cache.codes)        _cache.codes        = {};
+    if (!_cache.shopItems)    _cache.shopItems    = [];
+    if (!_cache.stockMessages)_cache.stockMessages= {};
+    if (!_cache.codeChannel)  _cache.codeChannel  = null;
+    if (!_cache.redeems)      _cache.redeems      = {};
+    if (!_cache.redeemCounter)_cache.redeemCounter= 1;
+  } catch (err) {
+    console.error('JSONBin load failed:', err.message);
+    _cache = {
+      users: {}, warnings: {}, codes: {}, shopItems: [],
+      stockMessages: {}, codeChannel: null, redeems: {}, redeemCounter: 1,
     };
-    fs.writeFileSync(DB_PATH, JSON.stringify(blank, null, 2));
-    return blank;
   }
-  return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+  return _cache;
 }
-function saveDB(db) { fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2)); }
+
+async function saveDB() {
+  try {
+    await fetch(JSONBIN_URL, {
+      method: 'PUT',
+      headers: JSONBIN_HEADERS,
+      body: JSON.stringify(_cache),
+    });
+  } catch (err) {
+    console.error('JSONBin save failed:', err.message);
+  }
+}
 
 // ── users ─────────────────────────────────────────────────────────
-function getUser(uid, username) {
-  const db = loadDB();
+async function getUser(uid, username) {
+  const db = await loadDB();
   if (!db.users[uid]) {
     db.users[uid] = { username: username || 'Unknown', balance: 0, inventory: [], lastDaily: 0 };
-    saveDB(db);
+    await saveDB();
   }
   return db.users[uid];
 }
-function saveUser(uid, data) { const db = loadDB(); db.users[uid] = data; saveDB(db); }
-function dbAddCoins(uid, username, amt) {
-  const u = getUser(uid, username); u.balance += amt; saveUser(uid, u); return u.balance;
+async function dbAddCoins(uid, username, amt) {
+  const db = await loadDB();
+  if (!db.users[uid]) db.users[uid] = { username: username || 'Unknown', balance: 0, inventory: [], lastDaily: 0 };
+  db.users[uid].balance += amt;
+  await saveDB();
+  return db.users[uid].balance;
 }
-function dbRemoveCoins(uid, amt) {
-  const u = getUser(uid); u.balance = Math.max(0, u.balance - amt); saveUser(uid, u); return u.balance;
+async function dbRemoveCoins(uid, amt) {
+  const db = await loadDB();
+  if (!db.users[uid]) db.users[uid] = { username: 'Unknown', balance: 0, inventory: [], lastDaily: 0 };
+  db.users[uid].balance = Math.max(0, db.users[uid].balance - amt);
+  await saveDB();
+  return db.users[uid].balance;
 }
-function dbSetCoins(uid, username, amt) {
-  const u = getUser(uid, username); u.balance = amt; saveUser(uid, u);
+async function dbSetCoins(uid, username, amt) {
+  const db = await loadDB();
+  if (!db.users[uid]) db.users[uid] = { username: username || 'Unknown', balance: 0, inventory: [], lastDaily: 0 };
+  db.users[uid].balance = amt;
+  await saveDB();
 }
-function dbSetLastDaily(uid, ts) {
-  const u = getUser(uid); u.lastDaily = (ts === undefined ? Date.now() : ts); saveUser(uid, u);
+async function dbSetLastDaily(uid, ts) {
+  const db = await loadDB();
+  if (!db.users[uid]) db.users[uid] = { username: 'Unknown', balance: 0, inventory: [], lastDaily: 0 };
+  db.users[uid].lastDaily = ts === undefined ? Date.now() : ts;
+  await saveDB();
 }
-function dbAddInventory(uid, item) { const u = getUser(uid); u.inventory.push(item); saveUser(uid, u); }
-function dbRemoveInventory(uid, item) {
-  const u = getUser(uid);
-  const idx = u.inventory.findIndex(i => i.toLowerCase().includes(item.toLowerCase()));
+async function dbAddInventory(uid, item) {
+  const db = await loadDB();
+  if (!db.users[uid]) db.users[uid] = { username: 'Unknown', balance: 0, inventory: [], lastDaily: 0 };
+  db.users[uid].inventory.push(item);
+  await saveDB();
+}
+async function dbRemoveInventory(uid, item) {
+  const db = await loadDB();
+  if (!db.users[uid]) return false;
+  const idx = db.users[uid].inventory.findIndex(i => i.toLowerCase().includes(item.toLowerCase()));
   if (idx === -1) return false;
-  u.inventory.splice(idx, 1); saveUser(uid, u); return true;
+  db.users[uid].inventory.splice(idx, 1);
+  await saveDB();
+  return true;
 }
-function dbClearInventory(uid) { const u = getUser(uid); u.inventory = []; saveUser(uid, u); }
-function dbGetInventory(uid) { return getUser(uid).inventory; }
-function dbLeaderboard(n) {
-  const db = loadDB();
+async function dbClearInventory(uid) {
+  const db = await loadDB();
+  if (db.users[uid]) { db.users[uid].inventory = []; await saveDB(); }
+}
+async function dbGetInventory(uid) {
+  const db = await loadDB();
+  return db.users[uid]?.inventory || [];
+}
+async function dbLeaderboard(n) {
+  const db = await loadDB();
   return Object.entries(db.users)
     .map(([userId, d]) => ({ userId, balance: d.balance }))
     .sort((a, b) => b.balance - a.balance)
@@ -74,70 +131,120 @@ function dbLeaderboard(n) {
 }
 
 // ── warnings ──────────────────────────────────────────────────────
-function dbAddWarning(uid, username, reason, by) {
-  const db = loadDB();
+async function dbAddWarning(uid, username, reason, by) {
+  const db = await loadDB();
   if (!db.warnings[uid]) db.warnings[uid] = [];
   db.warnings[uid].push({ reason, by });
-  saveDB(db);
+  await saveDB();
   return db.warnings[uid].length;
 }
-function dbGetWarnings(uid) { return loadDB().warnings[uid] || []; }
-function dbClearWarnings(uid) { const db = loadDB(); db.warnings[uid] = []; saveDB(db); }
+async function dbGetWarnings(uid) {
+  const db = await loadDB();
+  return db.warnings[uid] || [];
+}
+async function dbClearWarnings(uid) {
+  const db = await loadDB();
+  db.warnings[uid] = [];
+  await saveDB();
+}
 
 // ── shop items ────────────────────────────────────────────────────
-function dbGetShopItems() { return loadDB().shopItems || []; }
-function dbAddShopItem(item) { const db = loadDB(); db.shopItems.push(item); saveDB(db); }
-function dbRemoveShopItem(name) {
-  const db = loadDB();
+async function dbGetShopItems() { const db = await loadDB(); return db.shopItems || []; }
+async function dbAddShopItem(item) { const db = await loadDB(); db.shopItems.push(item); await saveDB(); }
+async function dbRemoveShopItem(name) {
+  const db = await loadDB();
   const idx = db.shopItems.findIndex(i => i.name.toLowerCase() === name.toLowerCase());
   if (idx === -1) return false;
-  db.shopItems.splice(idx, 1); saveDB(db); return true;
+  db.shopItems.splice(idx, 1); await saveDB(); return true;
 }
-function dbDecrementStock(name) {
-  const db = loadDB();
+async function dbDecrementStock(name) {
+  const db = await loadDB();
   const item = db.shopItems.find(i => i.name.toLowerCase() === name.toLowerCase());
-  if (item && item.stock > 0) { item.stock--; saveDB(db); }
+  if (item && item.stock > 0) { item.stock--; await saveDB(); }
 }
 
 // ── stock messages ────────────────────────────────────────────────
-function dbGetStockMsg(channelId) { return loadDB().stockMessages[channelId] || null; }
-function dbSetStockMsg(channelId, msgId) {
-  const db = loadDB(); db.stockMessages[channelId] = msgId; saveDB(db);
+async function dbGetStockMsg(channelId) { const db = await loadDB(); return db.stockMessages[channelId] || null; }
+async function dbSetStockMsg(channelId, msgId) {
+  const db = await loadDB(); db.stockMessages[channelId] = msgId; await saveDB();
 }
 
 // ── codes ─────────────────────────────────────────────────────────
-function dbGetCode(code) { return loadDB().codes[code] || null; }
-function dbGetAllCodes() { return Object.values(loadDB().codes); }
-function dbAddCode(entry) { const db = loadDB(); db.codes[entry.code] = entry; saveDB(db); }
-function dbRemoveCode(code) { const db = loadDB(); delete db.codes[code]; saveDB(db); }
-function dbRedeemCode(code, uid) {
-  const db = loadDB();
+async function dbGetCode(code) { const db = await loadDB(); return db.codes[code] || null; }
+async function dbGetAllCodes() { const db = await loadDB(); return Object.values(db.codes); }
+async function dbAddCode(entry) { const db = await loadDB(); db.codes[entry.code] = entry; await saveDB(); }
+async function dbRemoveCode(code) { const db = await loadDB(); delete db.codes[code]; await saveDB(); }
+async function dbRedeemCode(code, uid) {
+  const db = await loadDB();
   if (!db.codes[code]) return;
   db.codes[code].uses++;
   db.codes[code].usedBy.push(uid);
-  saveDB(db);
+  await saveDB();
 }
-function dbGetCodeChannel() { return loadDB().codeChannel || null; }
-function dbSetCodeChannel(id) { const db = loadDB(); db.codeChannel = id; saveDB(db); }
+async function dbGetCodeChannel() { const db = await loadDB(); return db.codeChannel || null; }
+async function dbSetCodeChannel(id) { const db = await loadDB(); db.codeChannel = id; await saveDB(); }
 
 // ── redeems ───────────────────────────────────────────────────────
-function dbAddRedeem(data) {
-  const db = loadDB();
+async function dbAddRedeem(data) {
+  const db = await loadDB();
   const id = db.redeemCounter++;
   db.redeems[id] = { id, ...data, status: 'pending' };
-  saveDB(db);
+  await saveDB();
   return id;
 }
-function dbGetRedeem(id) { return loadDB().redeems[id] || null; }
-function dbGetPendingRedeems() {
-  return Object.values(loadDB().redeems).filter(r => r.status === 'pending');
+async function dbGetRedeem(id) { const db = await loadDB(); return db.redeems[id] || null; }
+async function dbGetPendingRedeems() {
+  const db = await loadDB();
+  return Object.values(db.redeems).filter(r => r.status === 'pending');
 }
-function dbMarkRedeemDone(id, by) {
-  const db = loadDB();
+async function dbMarkRedeemDone(id, by) {
+  const db = await loadDB();
   if (!db.redeems[id]) return;
   db.redeems[id].status = 'paid';
   db.redeems[id].processedBy = by;
-  saveDB(db);
+  await saveDB();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  CODE EXPIRY CHECKER
+//  Runs every 30 seconds — when a code expires it edits the
+//  announcement message to show it has ended.
+// ══════════════════════════════════════════════════════════════════
+async function checkCodeExpiry() {
+  const db = await loadDB();
+  const now = Date.now();
+  let changed = false;
+
+  for (const code of Object.values(db.codes)) {
+    if (code.expired) continue;
+    const expiredByTime  = code.expiresAt && now > code.expiresAt;
+    const expiredByUses  = code.maxUses > 0 && code.uses >= code.maxUses;
+    if (expiredByTime || expiredByUses) {
+      code.expired = true;
+      changed = true;
+
+      // Edit the announcement message if we stored its ID
+      if (code.announceChannelId && code.announceMessageId) {
+        try {
+          const channel = await client.channels.fetch(code.announceChannelId);
+          const msg     = await channel.messages.fetch(code.announceMessageId);
+          const expiredAt = code.expiresAt ? Math.floor(code.expiresAt / 1000) : Math.floor(Date.now() / 1000);
+        const expiredEmbed = new EmbedBuilder()
+            .setColor(0x888888)
+            .setTitle('❌ Code Expired')
+            .setDescription(
+              `~~**Code:** \`${code.code}\`~~\n` +
+              `**Reward:** ${fmt(code.reward)}\n` +
+              `Expired: <t:${expiredAt}:F>\n` +
+              `**Total uses:** ${code.uses}`
+            );
+          await msg.edit({ embeds: [expiredEmbed] });
+        } catch { /* message deleted or no perms */ }
+      }
+    }
+  }
+
+  if (changed) await saveDB();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -216,7 +323,7 @@ const commands = [
     .addStringOption(o => o.setName('item').setDescription('Item name from /shop').setRequired(true)),
   new SlashCommandBuilder().setName('inventory').setDescription('View your inventory')
     .addUserOption(o => o.setName('user').setDescription('User to check').setRequired(false)),
-  new SlashCommandBuilder().setName('use').setDescription('Redeem an item — opens a form for Roblox info')
+  new SlashCommandBuilder().setName('use').setDescription('Redeem an item — enter your Roblox username')
     .addStringOption(o => o.setName('item').setDescription('Item name').setRequired(true)),
 
   // Redemption Admin
@@ -229,16 +336,16 @@ const commands = [
     .addStringOption(o => o.setName('code').setDescription('Code word').setRequired(true))
     .addIntegerOption(o => o.setName('reward').setDescription('Coins rewarded').setRequired(true).setMinValue(1))
     .addIntegerOption(o => o.setName('minutes').setDescription('Expiry in minutes (0 = never)').setRequired(true).setMinValue(0))
-    .addIntegerOption(o => o.setName('max_uses').setDescription('Max uses (0 = unlimited)').setRequired(false).setMinValue(0))
-    .addChannelOption(o => o.setName('channel').setDescription('Announce channel').setRequired(false)),
+    .addChannelOption(o => o.setName('channel').setDescription('Channel to announce in (overrides default)').setRequired(false))
+    .addIntegerOption(o => o.setName('max_uses').setDescription('Max uses (0 = unlimited)').setRequired(false).setMinValue(0)),
   new SlashCommandBuilder().setName('make-code').setDescription('[Admin] Create a permanent code')
     .addStringOption(o => o.setName('code').setDescription('Code word').setRequired(true))
     .addIntegerOption(o => o.setName('reward').setDescription('Coins rewarded').setRequired(true).setMinValue(1))
-    .addIntegerOption(o => o.setName('max_uses').setDescription('Max uses (0 = unlimited)').setRequired(false).setMinValue(0))
-    .addChannelOption(o => o.setName('channel').setDescription('Announce channel').setRequired(false)),
+    .addChannelOption(o => o.setName('channel').setDescription('Channel to announce in (overrides default)').setRequired(false))
+    .addIntegerOption(o => o.setName('max_uses').setDescription('Max uses (0 = unlimited)').setRequired(false).setMinValue(0)),
   new SlashCommandBuilder().setName('remove-code').setDescription('[Admin] Delete a code')
     .addStringOption(o => o.setName('code').setDescription('Code to remove').setRequired(true))
-    .addChannelOption(o => o.setName('channel').setDescription('Announce removal channel').setRequired(false)),
+    .addChannelOption(o => o.setName('channel').setDescription('Channel to announce removal (overrides default)').setRequired(false)),
   new SlashCommandBuilder().setName('redeem-code').setDescription('Redeem a code for coins')
     .addStringOption(o => o.setName('code').setDescription('The code').setRequired(true)),
   new SlashCommandBuilder().setName('codes').setDescription('[Admin] View all active codes'),
@@ -296,7 +403,7 @@ const commands = [
     .addUserOption(o => o.setName('user').setDescription('Target user').setRequired(true)),
   new SlashCommandBuilder().setName('timeout').setDescription('[Admin] Timeout a user')
     .addUserOption(o => o.setName('user').setDescription('Target user').setRequired(true))
-    .addIntegerOption(o => o.setName('minutes').setDescription('Duration in minutes (max 40320)').setRequired(true).setMinValue(1).setMaxValue(40320))
+    .addIntegerOption(o => o.setName('minutes').setDescription('Duration in minutes').setRequired(true).setMinValue(1).setMaxValue(40320))
     .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(false)),
   new SlashCommandBuilder().setName('untimeout').setDescription('[Admin] Remove timeout from a user')
     .addUserOption(o => o.setName('user').setDescription('Target user').setRequired(true)),
@@ -314,22 +421,22 @@ const commands = [
     .addIntegerOption(o => o.setName('amount').setDescription('Number of messages (1-100)').setRequired(true).setMinValue(1).setMaxValue(100))
     .addUserOption(o => o.setName('user').setDescription('Only delete from this user').setRequired(false)),
   new SlashCommandBuilder().setName('slowmode').setDescription('[Admin] Set channel slowmode')
-    .addIntegerOption(o => o.setName('seconds').setDescription('Seconds (0 = off, max 21600)').setRequired(true).setMinValue(0).setMaxValue(21600))
+    .addIntegerOption(o => o.setName('seconds').setDescription('Seconds (0 = off)').setRequired(true).setMinValue(0).setMaxValue(21600))
     .addChannelOption(o => o.setName('channel').setDescription('Channel (defaults to current)').setRequired(false)),
   new SlashCommandBuilder().setName('lock').setDescription('[Admin] Lock a channel')
-    .addChannelOption(o => o.setName('channel').setDescription('Channel to lock (defaults to current)').setRequired(false))
+    .addChannelOption(o => o.setName('channel').setDescription('Channel (defaults to current)').setRequired(false))
     .addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(false)),
   new SlashCommandBuilder().setName('unlock').setDescription('[Admin] Unlock a channel')
-    .addChannelOption(o => o.setName('channel').setDescription('Channel to unlock (defaults to current)').setRequired(false)),
+    .addChannelOption(o => o.setName('channel').setDescription('Channel (defaults to current)').setRequired(false)),
   new SlashCommandBuilder().setName('announce').setDescription('[Admin] Send an announcement embed')
     .addChannelOption(o => o.setName('channel').setDescription('Target channel').setRequired(true))
     .addStringOption(o => o.setName('title').setDescription('Title').setRequired(true))
     .addStringOption(o => o.setName('message').setDescription('Message').setRequired(true))
-    .addStringOption(o => o.setName('color').setDescription('Hex color (e.g. ff0000)').setRequired(false)),
+    .addStringOption(o => o.setName('color').setDescription('Hex color e.g. ff0000').setRequired(false)),
 
   // Help
   new SlashCommandBuilder().setName('help').setDescription('View all commands'),
-  new SlashCommandBuilder().setName('adminhelp').setDescription('View all admin commands'),
+  new SlashCommandBuilder().setName('adminhelp').setDescription('[Admin] View all admin commands'),
 ].map(c => c.toJSON());
 
 // ══════════════════════════════════════════════════════════════════
@@ -349,51 +456,41 @@ const client = new Client({
 async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
-  // Step 1: Wipe ALL global commands first
+  // 1. Wipe global commands
   console.log('🧹 Clearing old global commands...');
   try {
     await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: [] });
     console.log('✅ Global commands cleared.');
-  } catch (err) {
-    console.error('❌ Failed to clear global commands:', err.message);
-  }
+  } catch (err) { console.error('❌ Clear global failed:', err.message); }
 
-  // Step 2: Wipe ALL guild commands in every server
+  // 2. Wipe + re-register per guild for instant availability
   for (const [guildId] of client.guilds.cache) {
     try {
       await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId), { body: [] });
-      console.log(`🧹 Guild ${guildId} commands cleared.`);
-    } catch (err) {
-      console.error(`❌ Failed to clear guild ${guildId}:`, err.message);
-    }
-  }
+      console.log(`🧹 Guild ${guildId} cleared.`);
+    } catch (err) { console.error(`❌ Clear guild ${guildId} failed:`, err.message); }
 
-  // Step 3: Register fresh commands per-guild (instant, no 1hr wait)
-  console.log(`📡 Registering ${commands.length} fresh commands...`);
-  for (const [guildId] of client.guilds.cache) {
     try {
       await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId), { body: commands });
-      console.log(`✅ Guild ${guildId} updated.`);
-    } catch (err) {
-      console.error(`❌ Guild ${guildId} failed:`, err.message);
-    }
+      console.log(`✅ Guild ${guildId} registered.`);
+    } catch (err) { console.error(`❌ Register guild ${guildId} failed:`, err.message); }
   }
   console.log('✅ All commands registered fresh!');
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  MESSAGE COUNTING  — 1 message = 1 coin (original working logic)
+//  MESSAGE COUNTING  — 1 message = 1 coin
 // ══════════════════════════════════════════════════════════════════
-client.on('messageCreate', message => {
+client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild) return;
-  dbAddCoins(message.author.id, message.author.username, 1);
+  await dbAddCoins(message.author.id, message.author.username, 1);
 });
 
 // ══════════════════════════════════════════════════════════════════
 //  INTERACTION ROUTER
 // ══════════════════════════════════════════════════════════════════
 client.on('interactionCreate', async interaction => {
-  if (interaction.isButton()) return handleButton(interaction);
+  if (interaction.isButton())      return handleButton(interaction);
   if (interaction.isModalSubmit()) return handleModal(interaction);
   if (!interaction.isChatInputCommand()) return;
 
@@ -449,9 +546,7 @@ client.on('interactionCreate', async interaction => {
   } catch (err) {
     console.error(`Error in /${interaction.commandName}:`, err);
     const payload = { content: '⚠️ Something went wrong. Please try again.', ephemeral: true };
-    interaction.replied || interaction.deferred
-      ? interaction.followUp(payload)
-      : interaction.reply(payload);
+    interaction.replied || interaction.deferred ? interaction.followUp(payload) : interaction.reply(payload);
   }
 });
 
@@ -461,7 +556,7 @@ client.on('interactionCreate', async interaction => {
 
 async function cmdBalance(i) {
   const target = i.options.getUser('user') || i.user;
-  const data = getUser(target.id, target.username);
+  const data   = await getUser(target.id, target.username);
   return i.reply({
     embeds: [new EmbedBuilder().setColor(0xffd700).setTitle(`${COIN} ${target.username}'s Balance`)
       .setThumbnail(target.displayAvatarURL())
@@ -471,30 +566,29 @@ async function cmdBalance(i) {
 }
 
 async function cmdDaily(i) {
-  const data = getUser(i.user.id, i.user.username);
+  const data = await getUser(i.user.id, i.user.username);
   const now  = Date.now();
   const CD   = 24 * 60 * 60 * 1000;
   if (data.lastDaily && now - data.lastDaily < CD) {
-    const rem = CD - (now - data.lastDaily);
-    const h = Math.floor(rem / 3600000);
-    const m = Math.floor((rem % 3600000) / 60000);
+    const nextDaily = Math.floor((data.lastDaily + CD) / 1000);
     return i.reply({
       embeds: [new EmbedBuilder().setColor(0xff4444).setTitle('⏰ Already Claimed')
-        .setDescription(`Come back in **${h}h ${m}m**.`)], ephemeral: true,
+        .setDescription(`You already claimed your daily!\nCome back <t:${nextDaily}:R> \u2014 <t:${nextDaily}:F>`)], ephemeral: true,
     });
   }
-  dbAddCoins(i.user.id, i.user.username, 100);
-  dbSetLastDaily(i.user.id);
+  await dbAddCoins(i.user.id, i.user.username, 100);
+  await dbSetLastDaily(i.user.id);
+  const newBal = (await getUser(i.user.id)).balance;
+  const nextTs = Math.floor((Date.now() + CD) / 1000);
   return i.reply({
     embeds: [new EmbedBuilder().setColor(0x00ff88).setTitle('🎁 Daily Reward!')
-      .setDescription(`You received **${fmt(100)}**!\nBalance: **${fmt(getUser(i.user.id).balance)}**`)
-      .setThumbnail(i.user.displayAvatarURL())
-      .setFooter({ text: 'Come back in 24 hours!' })],
+      .setDescription(`You received ${fmt(100)}!\nBalance: ${fmt(newBal)}\n\nNext daily: <t:${nextTs}:R>`)
+      .setThumbnail(i.user.displayAvatarURL())],
   });
 }
 
 async function cmdLeaderboard(i) {
-  const top  = dbLeaderboard(10);
+  const top  = await dbLeaderboard(10);
   const desc = top.map((u, idx) => {
     const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `**${idx + 1}.**`;
     return `${medal} <@${u.userId}> — ${fmt(u.balance)}`;
@@ -511,11 +605,11 @@ async function cmdPay(i) {
   const amount = i.options.getInteger('amount');
   if (target.id === i.user.id) return i.reply({ content: "❌ Can't pay yourself!", ephemeral: true });
   if (target.bot) return i.reply({ content: "❌ Can't pay bots!", ephemeral: true });
-  const sender = getUser(i.user.id, i.user.username);
+  const sender = await getUser(i.user.id, i.user.username);
   if (sender.balance < amount)
     return i.reply({ content: `❌ You only have ${fmt(sender.balance)}.`, ephemeral: true });
-  dbRemoveCoins(i.user.id, amount);
-  dbAddCoins(target.id, target.username, amount);
+  await dbRemoveCoins(i.user.id, amount);
+  await dbAddCoins(target.id, target.username, amount);
   return i.reply({
     embeds: [new EmbedBuilder().setColor(0x00ff88).setTitle('💸 Transfer Successful')
       .setDescription(`**${i.user.username}** sent ${fmt(amount)} to **${target.username}**`)],
@@ -529,12 +623,13 @@ async function cmdPay(i) {
 async function cmdCoinflip(i) {
   const side = i.options.getString('side');
   const bet  = i.options.getInteger('bet');
-  const user = getUser(i.user.id, i.user.username);
+  const user = await getUser(i.user.id, i.user.username);
   if (user.balance < bet)
     return i.reply({ content: `❌ You only have ${fmt(user.balance)}.`, ephemeral: true });
   const result = Math.random() < 0.5 ? 'heads' : 'tails';
   const won    = result === side;
-  won ? dbAddCoins(i.user.id, i.user.username, bet) : dbRemoveCoins(i.user.id, bet);
+  won ? await dbAddCoins(i.user.id, i.user.username, bet) : await dbRemoveCoins(i.user.id, bet);
+  const newBal = (await getUser(i.user.id)).balance;
   return i.reply({
     embeds: [new EmbedBuilder().setColor(won ? 0x00ff88 : 0xff4444)
       .setTitle(won ? '🪙 You Won!' : '🪙 You Lost!')
@@ -542,17 +637,16 @@ async function cmdCoinflip(i) {
         `The coin landed on **${result}** ${result === 'heads' ? '👑' : '🔵'}\n` +
         `You guessed **${side}**\n\n` +
         (won ? `✅ Won ${fmt(bet)}!` : `❌ Lost ${fmt(bet)}`) +
-        `\n\n💰 Balance: ${fmt(getUser(i.user.id).balance)}`
+        `\n\n💰 Balance: ${fmt(newBal)}`
       )],
   });
 }
 
 async function cmdSlots(i) {
   const bet  = i.options.getInteger('bet');
-  const user = getUser(i.user.id, i.user.username);
+  const user = await getUser(i.user.id, i.user.username);
   if (user.balance < bet)
     return i.reply({ content: `❌ You only have ${fmt(user.balance)}.`, ephemeral: true });
-
   const symbols = ['🍒','🍋','🍊','🍇','⭐','💎','7️⃣'];
   const weights = [30, 20, 20, 15, 10, 4, 1];
   function spin() {
@@ -571,14 +665,15 @@ async function cmdSlots(i) {
     mult = 1.5; resultText = '✨ Two of a kind! 1.5×!';
   }
   let win = 0;
-  if (mult > 0) { win = Math.floor(bet * mult); dbAddCoins(i.user.id, i.user.username, win - bet); }
-  else { dbRemoveCoins(i.user.id, bet); }
+  if (mult > 0) { win = Math.floor(bet * mult); await dbAddCoins(i.user.id, i.user.username, win - bet); }
+  else { await dbRemoveCoins(i.user.id, bet); }
+  const newBal = (await getUser(i.user.id)).balance;
   return i.reply({
     embeds: [new EmbedBuilder().setColor(mult > 0 ? 0xffd700 : 0xff4444).setTitle('🎰 Slot Machine')
       .setDescription(
         `**[ ${reels.join(' | ')} ]**\n\n${resultText}\n\n` +
         (mult > 0 ? `✅ Won ${fmt(win)} (+${fmt(win - bet)})` : `❌ Lost ${fmt(bet)}`) +
-        `\n💰 Balance: ${fmt(getUser(i.user.id).balance)}`
+        `\n💰 Balance: ${fmt(newBal)}`
       )],
   });
 }
@@ -588,23 +683,22 @@ const bjGames = new Map();
 
 async function cmdBlackjack(i) {
   const bet  = i.options.getInteger('bet');
-  const user = getUser(i.user.id, i.user.username);
+  const user = await getUser(i.user.id, i.user.username);
   if (user.balance < bet)
     return i.reply({ content: `❌ You only have ${fmt(user.balance)}.`, ephemeral: true });
-
   const deck = buildDeck();
   const ph   = [drawCard(deck), drawCard(deck)];
   const dh   = [drawCard(deck), drawCard(deck)];
   bjGames.set(i.user.id, { bet, deck, ph, dh });
-  dbRemoveCoins(i.user.id, bet);
-
+  await dbRemoveCoins(i.user.id, bet);
   if (handValue(ph) === 21) {
     const win = Math.floor(bet * 2.5);
-    dbAddCoins(i.user.id, i.user.username, win);
+    await dbAddCoins(i.user.id, i.user.username, win);
     bjGames.delete(i.user.id);
+    const newBal = (await getUser(i.user.id)).balance;
     return i.reply({
       embeds: [new EmbedBuilder().setColor(0xffd700).setTitle('🃏 NATURAL BLACKJACK!')
-        .setDescription(`**Your hand:** ${handStr(ph)} = **21**\n\n🎉 Won ${fmt(win)} (2.5×)\n💰 Balance: ${fmt(getUser(i.user.id).balance)}`)],
+        .setDescription(`**Your hand:** ${handStr(ph)} = **21**\n\n🎉 Won ${fmt(win)} (2.5×)\n💰 Balance: ${fmt(newBal)}`)],
     });
   }
   return i.reply({
@@ -621,19 +715,19 @@ async function handleButton(i) {
   if (!state) return i.reply({ content: 'No active game.', ephemeral: true });
   if (i.user.id !== userId) return i.reply({ content: "This isn't your game!", ephemeral: true });
   await i.deferUpdate();
-
   if (action === 'double') {
-    const u = getUser(userId, i.user.username);
-    if (u.balance >= state.bet) { dbRemoveCoins(userId, state.bet); state.bet *= 2; }
+    const u = await getUser(userId, i.user.username);
+    if (u.balance >= state.bet) { await dbRemoveCoins(userId, state.bet); state.bet *= 2; }
   }
   if (action === 'hit' || action === 'double') {
     state.ph.push(drawCard(state.deck));
     const v = handValue(state.ph);
     if (v > 21) {
       bjGames.delete(userId);
+      const newBal = (await getUser(userId)).balance;
       return i.editReply({
         embeds: [new EmbedBuilder().setColor(0xff4444).setTitle('🃏 BUST!')
-          .setDescription(`**Your hand:** ${handStr(state.ph)} = **${v}** — BUST!\n❌ Lost ${fmt(state.bet)}\n💰 Balance: ${fmt(getUser(userId).balance)}`)],
+          .setDescription(`**Your hand:** ${handStr(state.ph)} = **${v}** — BUST!\n❌ Lost ${fmt(state.bet)}\n💰 Balance: ${fmt(newBal)}`)],
         components: [],
       });
     }
@@ -657,11 +751,12 @@ async function resolveDealer(i, userId, state) {
   } else {
     result = `😞 **Dealer wins** (${dv}). Lost ${fmt(state.bet)}.`; color = 0xff4444;
   }
-  if (payout > 0) dbAddCoins(userId, i.user.username, payout);
+  if (payout > 0) await dbAddCoins(userId, i.user.username, payout);
   bjGames.delete(userId);
+  const newBal = (await getUser(userId)).balance;
   return i.editReply({
     embeds: [new EmbedBuilder().setColor(color).setTitle('🃏 Blackjack — Result')
-      .setDescription(`**Your hand:** ${handStr(state.ph)} = **${pv}**\n**Dealer:** ${handStr(state.dh)} = **${dv}**\n\n${result}\n💰 Balance: ${fmt(getUser(userId).balance)}`)],
+      .setDescription(`**Your hand:** ${handStr(state.ph)} = **${pv}**\n**Dealer:** ${handStr(state.dh)} = **${dv}**\n\n${result}\n💰 Balance: ${fmt(newBal)}`)],
     components: [],
   });
 }
@@ -686,9 +781,9 @@ function bjEmbed(ph, dh, bet, status) {
 // ══════════════════════════════════════════════════════════════════
 
 async function cmdShop(i) {
-  const extras = dbGetShopItems();
+  const extras = await dbGetShopItems();
   const embed  = new EmbedBuilder().setColor(0x00b4ff).setTitle('🛒 Coin Shop')
-    .setDescription('Use `/buy <name>` to purchase.\n\u200B');
+    .setDescription('Use `/buy <item>` to purchase.\n\u200B');
   SHOP_PACKAGES.forEach(p => {
     embed.addFields({ name: `📦 ${p.name}`, value: `${fmt(p.coins)}\n\`/buy ${p.name}\``, inline: true });
   });
@@ -696,11 +791,7 @@ async function cmdShop(i) {
     embed.addFields({ name: '\u200B', value: '**— Extra Items —**' });
     extras.forEach(it => {
       const stock = it.stock === -1 ? '∞' : it.stock === 0 ? '❌ Out of stock' : `${it.stock} left`;
-      embed.addFields({
-        name: `${it.emoji || '📦'} ${it.name} — ${fmt(it.price)}`,
-        value: `${it.description}\nStock: ${stock}\n\`/buy ${it.name}\``,
-        inline: true,
-      });
+      embed.addFields({ name: `${it.emoji || '📦'} ${it.name} — ${fmt(it.price)}`, value: `${it.description}\nStock: ${stock}\n\`/buy ${it.name}\``, inline: true });
     });
   }
   embed.setFooter({ text: 'Contact staff after purchase to receive your item' });
@@ -711,35 +802,37 @@ async function cmdBuy(i) {
   const input = i.options.getString('item').toLowerCase().trim();
   const pkg   = SHOP_PACKAGES.find(p => p.name.toLowerCase() === input);
   if (pkg) {
-    const user = getUser(i.user.id, i.user.username);
+    const user = await getUser(i.user.id, i.user.username);
     if (user.balance < pkg.coins)
       return i.reply({ content: `❌ Need ${fmt(pkg.coins)} — you have ${fmt(user.balance)}.`, ephemeral: true });
-    dbRemoveCoins(i.user.id, pkg.coins);
-    dbAddInventory(i.user.id, pkg.name);
+    await dbRemoveCoins(i.user.id, pkg.coins);
+    await dbAddInventory(i.user.id, pkg.name);
+    const newBal = (await getUser(i.user.id)).balance;
     return i.reply({
       embeds: [new EmbedBuilder().setColor(0x00ff88).setTitle('✅ Purchase Successful!')
-        .setDescription(`Bought **${pkg.name}** for ${fmt(pkg.coins)}\n💰 Balance: ${fmt(getUser(i.user.id).balance)}\n\n> 📩 Use \`/use ${pkg.name}\` to redeem!`)],
+        .setDescription(`Bought **${pkg.name}** for ${fmt(pkg.coins)}\n💰 Balance: ${fmt(newBal)}\n\n> Use \`/use ${pkg.name}\` to redeem!`)],
     });
   }
-  const items = dbGetShopItems();
+  const items = await dbGetShopItems();
   const item  = items.find(it => it.name.toLowerCase() === input);
   if (!item) return i.reply({ content: '❌ Item not found. Check `/shop`.', ephemeral: true });
   if (item.stock === 0) return i.reply({ content: '❌ Out of stock!', ephemeral: true });
-  const user = getUser(i.user.id, i.user.username);
+  const user = await getUser(i.user.id, i.user.username);
   if (user.balance < item.price)
     return i.reply({ content: `❌ Need ${fmt(item.price)} — you have ${fmt(user.balance)}.`, ephemeral: true });
-  dbRemoveCoins(i.user.id, item.price);
-  dbAddInventory(i.user.id, item.name);
-  if (item.stock > 0) dbDecrementStock(item.name);
+  await dbRemoveCoins(i.user.id, item.price);
+  await dbAddInventory(i.user.id, item.name);
+  if (item.stock > 0) await dbDecrementStock(item.name);
+  const newBal = (await getUser(i.user.id)).balance;
   return i.reply({
     embeds: [new EmbedBuilder().setColor(0x00ff88).setTitle('✅ Purchase Successful!')
-      .setDescription(`Bought **${item.emoji || '📦'} ${item.name}** for ${fmt(item.price)}\n💰 Balance: ${fmt(getUser(i.user.id).balance)}`)],
+      .setDescription(`Bought **${item.emoji || '📦'} ${item.name}** for ${fmt(item.price)}\n💰 Balance: ${fmt(newBal)}`)],
   });
 }
 
 async function cmdInventory(i) {
   const target = i.options.getUser('user') || i.user;
-  const inv    = dbGetInventory(target.id);
+  const inv    = await dbGetInventory(target.id);
   if (!inv.length) return i.reply({
     embeds: [new EmbedBuilder().setColor(0x7289da).setTitle(`🎒 ${target.username}'s Inventory`)
       .setDescription('Empty! Use `/shop` to browse.')],
@@ -756,11 +849,12 @@ async function cmdInventory(i) {
 
 async function cmdUse(i) {
   const input = i.options.getString('item').toLowerCase();
-  const inv   = dbGetInventory(i.user.id);
+  const inv   = await dbGetInventory(i.user.id);
   const idx   = inv.findIndex(it => it.toLowerCase().includes(input));
   if (idx === -1) return i.reply({ content: "❌ You don't have that item. Check `/inventory`.", ephemeral: true });
   const itemName = inv[idx];
 
+  // Show modal — username only
   const modal = new ModalBuilder()
     .setCustomId(`redeem_modal_${i.user.id}_${encodeURIComponent(itemName)}`)
     .setTitle('Redemption Form');
@@ -768,10 +862,6 @@ async function cmdUse(i) {
     new ActionRowBuilder().addComponents(
       new TextInputBuilder().setCustomId('roblox_username').setLabel('Your Roblox Username')
         .setStyle(TextInputStyle.Short).setPlaceholder('e.g. Builderman').setRequired(true)
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder().setCustomId('gamepass_link').setLabel('Gamepass Link')
-        .setStyle(TextInputStyle.Short).setPlaceholder('https://www.roblox.com/game-pass/...').setRequired(true)
     )
   );
   return i.showModal(modal);
@@ -779,25 +869,22 @@ async function cmdUse(i) {
 
 async function handleModal(i) {
   if (!i.customId.startsWith('redeem_modal_')) return;
-  const parts    = i.customId.split('_');
-  const userId   = parts[2];
-  const itemName = decodeURIComponent(parts.slice(3).join('_'));
+  const parts        = i.customId.split('_');
+  const userId       = parts[2];
+  const itemName     = decodeURIComponent(parts.slice(3).join('_'));
   if (i.user.id !== userId) return i.reply({ content: "❌ This form isn't for you.", ephemeral: true });
 
   const robloxUsername = i.fields.getTextInputValue('roblox_username').trim();
-  const gampassLink    = i.fields.getTextInputValue('gamepass_link').trim();
-  if (!gampassLink.includes('roblox.com'))
-    return i.reply({ content: '❌ Invalid Roblox gamepass link. Try `/use` again.', ephemeral: true });
 
-  dbRemoveInventory(userId, itemName);
-  const requestId = dbAddRedeem({ userId, username: i.user.username, itemName, robloxUsername, gampassLink });
+  await dbRemoveInventory(userId, itemName);
+  const requestId = await dbAddRedeem({ userId, username: i.user.username, itemName, robloxUsername });
 
   return i.reply({
     embeds: [new EmbedBuilder().setColor(0x00ff88).setTitle('✅ Redemption Submitted!')
       .setDescription(
         `Your request has been submitted! Staff will process it soon.\n\n` +
-        `**Item:** ${itemName}\n**Roblox Username:** ${robloxUsername}\n**Gamepass Link:** ${gampassLink}\n\n` +
-        `**Request ID:** \`#${requestId}\`\n\n> You'll receive a DM when done!`
+        `**Item:** ${itemName}\n**Roblox Username:** ${robloxUsername}\n\n` +
+        `**Request ID:** \`#${requestId}\`\n\n> You'll receive a DM when it's done!`
       )],
     ephemeral: true,
   });
@@ -805,16 +892,16 @@ async function handleModal(i) {
 
 async function cmdCheckRedeems(i) {
   if (!await guardAdmin(i)) return;
-  const pending = dbGetPendingRedeems();
+  const pending = await dbGetPendingRedeems();
   if (!pending.length) return i.reply({
     embeds: [new EmbedBuilder().setColor(0x00ff88).setTitle('✅ No Pending Requests')
-      .setDescription('There are no pending redemptions right now.')], ephemeral: true,
+      .setDescription('No pending redemptions right now.')], ephemeral: true,
   });
   const embed = new EmbedBuilder().setColor(0x00b4ff).setTitle(`📋 Pending Redemptions (${pending.length})`);
   pending.forEach(r => {
     embed.addFields({
-      name: `#${r.id} — ${r.itemName}`,
-      value: `👤 **Discord:** <@${r.userId}> (${r.username})\n🎮 **Roblox:** \`${r.robloxUsername}\`\n🔗 **Gamepass:** ${r.gampassLink}\n> Use \`/finish-redeem ${r.id}\` to mark as done`,
+      name:  `#${r.id} — ${r.itemName}`,
+      value: `👤 **Discord:** <@${r.userId}> (${r.username})\n🎮 **Roblox:** \`${r.robloxUsername}\`\n> Use \`/finish-redeem ${r.id}\` to mark as done`,
       inline: false,
     });
   });
@@ -824,19 +911,17 @@ async function cmdCheckRedeems(i) {
 async function cmdFinishRedeem(i) {
   if (!await guardAdmin(i)) return;
   const requestId = i.options.getInteger('id');
-  const request   = dbGetRedeem(requestId);
+  const request   = await dbGetRedeem(requestId);
   if (!request) return i.reply({ content: `❌ No redemption found with ID **#${requestId}**.`, ephemeral: true });
-  if (request.status === 'paid') return i.reply({ content: `❌ Request **#${requestId}** is already marked as done.`, ephemeral: true });
-
-  dbMarkRedeemDone(requestId, i.user.tag);
-
+  if (request.status === 'paid') return i.reply({ content: `❌ Request **#${requestId}** is already done.`, ephemeral: true });
+  await dbMarkRedeemDone(requestId, i.user.tag);
   try {
     const user = await client.users.fetch(request.userId);
     await user.send({
       embeds: [new EmbedBuilder().setColor(0x00ff88).setTitle('🎉 Your Redemption Has Been Processed!')
         .setDescription(
           `Your request has been fulfilled!\n\n**Item:** ${request.itemName}\n` +
-          `**Roblox Username:** ${request.robloxUsername}\n**Gamepass Link:** ${request.gampassLink}\n\n` +
+          `**Roblox Username:** ${request.robloxUsername}\n\n` +
           `**Request ID:** \`#${requestId}\`\n**Processed by:** ${i.user.tag}\n\n> Thank you for your purchase!`
         )],
     });
@@ -850,6 +935,13 @@ async function cmdFinishRedeem(i) {
 //  CODES
 // ══════════════════════════════════════════════════════════════════
 
+async function getAnnounceChannel(optionChannel) {
+  if (optionChannel) return optionChannel;
+  const defaultId = await dbGetCodeChannel();
+  if (defaultId) return client.channels.fetch(defaultId).catch(() => null);
+  return null;
+}
+
 async function cmdDropCode(i) {
   if (!await guardAdmin(i)) return;
   const code    = i.options.getString('code').toUpperCase().trim();
@@ -857,18 +949,35 @@ async function cmdDropCode(i) {
   const minutes = i.options.getInteger('minutes');
   const maxUses = i.options.getInteger('max_uses') ?? 0;
   const channel = i.options.getChannel('channel');
-  if (dbGetCode(code)) return i.reply({ content: `❌ Code **${code}** already exists.`, ephemeral: true });
+  if (await dbGetCode(code)) return i.reply({ content: `❌ Code **${code}** already exists.`, ephemeral: true });
   const expiresAt = minutes > 0 ? Date.now() + minutes * 60 * 1000 : null;
-  dbAddCode({ code, reward, maxUses, uses: 0, expiresAt, permanent: false, createdBy: i.user.tag, usedBy: [] });
+
+  const announceChannel = await getAnnounceChannel(channel);
+
   const embed = new EmbedBuilder().setColor(0xffd700).setTitle('🎉 Code Dropped!')
     .setDescription(
       `**Code:** ||\`${code}\`||\n**Reward:** ${fmt(reward)}\n` +
-      `${minutes > 0 ? `⏰ Expires in **${minutes} minute(s)**` : '⏰ No expiry'}\n` +
+      `${expiresAt ? `⏰ Expires <t:${Math.floor(expiresAt/1000)}:R> — <t:${Math.floor(expiresAt/1000)}:F>` : '⏰ No expiry'}\n` +
       `${maxUses > 0 ? `👥 Max uses: **${maxUses}**` : '👥 Unlimited uses'}\n\n` +
       `Use \`/redeem-code ${code}\` to claim!`
     );
-  const announceChannel = channel || (dbGetCodeChannel() ? await client.channels.fetch(dbGetCodeChannel()).catch(() => null) : null);
-  if (announceChannel) { await announceChannel.send({ embeds: [embed] }); return i.reply({ content: `✅ Code dropped in <#${announceChannel.id}>!`, ephemeral: true }); }
+
+  let announceMessageId = null;
+  let announceChannelId = null;
+
+  if (announceChannel) {
+    const msg = await announceChannel.send({ embeds: [embed] });
+    announceMessageId = msg.id;
+    announceChannelId = announceChannel.id;
+  }
+
+  await dbAddCode({
+    code, reward, maxUses, uses: 0, expiresAt,
+    permanent: false, createdBy: i.user.tag, usedBy: [],
+    expired: false, announceMessageId, announceChannelId,
+  });
+
+  if (announceChannel) return i.reply({ content: `✅ Code **${code}** dropped in <#${announceChannel.id}>!`, ephemeral: true });
   return i.reply({ embeds: [embed] });
 }
 
@@ -878,16 +987,33 @@ async function cmdMakeCode(i) {
   const reward  = i.options.getInteger('reward');
   const maxUses = i.options.getInteger('max_uses') ?? 0;
   const channel = i.options.getChannel('channel');
-  if (dbGetCode(code)) return i.reply({ content: `❌ Code **${code}** already exists.`, ephemeral: true });
-  dbAddCode({ code, reward, maxUses, uses: 0, expiresAt: null, permanent: true, createdBy: i.user.tag, usedBy: [] });
+  if (await dbGetCode(code)) return i.reply({ content: `❌ Code **${code}** already exists.`, ephemeral: true });
+
+  const announceChannel = await getAnnounceChannel(channel);
+
   const embed = new EmbedBuilder().setColor(0x00b4ff).setTitle('📌 Permanent Code Created!')
     .setDescription(
       `**Code:** ||\`${code}\`||\n**Reward:** ${fmt(reward)}\n⏰ Never expires\n` +
       `${maxUses > 0 ? `👥 Max uses: **${maxUses}**` : '👥 Unlimited uses'}\n\n` +
       `Use \`/redeem-code ${code}\` to claim!`
     );
-  const announceChannel = channel || (dbGetCodeChannel() ? await client.channels.fetch(dbGetCodeChannel()).catch(() => null) : null);
-  if (announceChannel) { await announceChannel.send({ embeds: [embed] }); return i.reply({ content: `✅ Code created in <#${announceChannel.id}>!`, ephemeral: true }); }
+
+  let announceMessageId = null;
+  let announceChannelId = null;
+
+  if (announceChannel) {
+    const msg = await announceChannel.send({ embeds: [embed] });
+    announceMessageId = msg.id;
+    announceChannelId = announceChannel.id;
+  }
+
+  await dbAddCode({
+    code, reward, maxUses, uses: 0, expiresAt: null,
+    permanent: true, createdBy: i.user.tag, usedBy: [],
+    expired: false, announceMessageId, announceChannelId,
+  });
+
+  if (announceChannel) return i.reply({ content: `✅ Permanent code **${code}** created in <#${announceChannel.id}>!`, ephemeral: true });
   return i.reply({ embeds: [embed] });
 }
 
@@ -895,39 +1021,64 @@ async function cmdRemoveCode(i) {
   if (!await guardAdmin(i)) return;
   const code    = i.options.getString('code').toUpperCase().trim();
   const channel = i.options.getChannel('channel');
-  const existing = dbGetCode(code);
+  const existing = await dbGetCode(code);
   if (!existing) return i.reply({ content: `❌ No code **${code}** found.`, ephemeral: true });
-  dbRemoveCode(code);
+  await dbRemoveCode(code);
   const embed = new EmbedBuilder().setColor(0xff4444).setTitle('🗑️ Code Removed')
-    .setDescription(`Code **\`${code}\`** removed. It was used **${existing.uses}** time(s).`);
-  const announceChannel = channel || (dbGetCodeChannel() ? await client.channels.fetch(dbGetCodeChannel()).catch(() => null) : null);
+    .setDescription(`Code **\`${code}\`** has been removed.\nIt was used **${existing.uses}** time(s).`);
+  const announceChannel = await getAnnounceChannel(channel);
   if (announceChannel) { await announceChannel.send({ embeds: [embed] }); return i.reply({ content: `✅ Announced in <#${announceChannel.id}>.`, ephemeral: true }); }
   return i.reply({ embeds: [embed] });
 }
 
 async function cmdRedeemCode(i) {
   const code  = i.options.getString('code').toUpperCase().trim();
-  const entry = dbGetCode(code);
-  if (!entry) return i.reply({ content: '❌ Invalid code.', ephemeral: true });
+  const entry = await dbGetCode(code);
+  if (!entry)                                          return i.reply({ content: '❌ Invalid code.', ephemeral: true });
+  if (entry.expired)                                   return i.reply({ content: '❌ This code has expired.', ephemeral: true });
   if (entry.expiresAt && Date.now() > entry.expiresAt) return i.reply({ content: '❌ This code has expired.', ephemeral: true });
   if (entry.maxUses > 0 && entry.uses >= entry.maxUses) return i.reply({ content: '❌ This code has reached its maximum uses.', ephemeral: true });
-  if (entry.usedBy.includes(i.user.id)) return i.reply({ content: '❌ You already redeemed this code.', ephemeral: true });
-  dbRedeemCode(code, i.user.id);
-  dbAddCoins(i.user.id, i.user.username, entry.reward);
+  if (entry.usedBy.includes(i.user.id))                return i.reply({ content: '❌ You have already redeemed this code.', ephemeral: true });
+
+  await dbRedeemCode(code, i.user.id);
+  await dbAddCoins(i.user.id, i.user.username, entry.reward);
+
+  // Check if code just hit max uses now and mark expired
+  const updated = await dbGetCode(code);
+  if (updated && updated.maxUses > 0 && updated.uses >= updated.maxUses) {
+    const db = await loadDB();
+    db.codes[code].expired = true;
+    await saveDB();
+    // Edit the announcement message
+    if (updated.announceChannelId && updated.announceMessageId) {
+      try {
+        const ch  = await client.channels.fetch(updated.announceChannelId);
+        const msg = await ch.messages.fetch(updated.announceMessageId);
+        const usedUpTs = Math.floor(Date.now() / 1000);
+        await msg.edit({
+          embeds: [new EmbedBuilder().setColor(0x888888).setTitle('❌ Code Expired')
+            .setDescription(`~~**Code:** \`${code}\`~~\n**Reward:** ${fmt(entry.reward)}\nExpired: <t:${usedUpTs}:F>\n**Total uses:** ${updated.uses}`)],
+        });
+      } catch { /* ignore */ }
+    }
+  }
+
+  const newBal = (await getUser(i.user.id)).balance;
   return i.reply({
     embeds: [new EmbedBuilder().setColor(0x00ff88).setTitle('🎉 Code Redeemed!')
-      .setDescription(`You redeemed **\`${code}\`**!\n\nYou received ${fmt(entry.reward)}\n💰 New balance: ${fmt(getUser(i.user.id).balance)}`)],
+      .setDescription(`You redeemed **\`${code}\`**!\n\nYou received ${fmt(entry.reward)}\n💰 New balance: ${fmt(newBal)}`)],
     ephemeral: true,
   });
 }
 
 async function cmdCodes(i) {
   if (!await guardAdmin(i)) return;
-  const codes = dbGetAllCodes();
-  if (!codes.length) return i.reply({ content: '📭 No active codes.', ephemeral: true });
+  const codes = await dbGetAllCodes();
+  const active = codes.filter(c => !c.expired);
+  if (!active.length) return i.reply({ content: '📭 No active codes.', ephemeral: true });
   const embed = new EmbedBuilder().setColor(0x7289da).setTitle('🎟️ All Active Codes');
-  codes.forEach(c => {
-    const expiry = c.expiresAt ? `<t:${Math.floor(c.expiresAt / 1000)}:R>` : 'Never';
+  active.forEach(c => {
+    const expiry = c.expiresAt ? `<t:${Math.floor(c.expiresAt / 1000)}:R> (<t:${Math.floor(c.expiresAt / 1000)}:F>)` : 'Never';
     const uses   = c.maxUses > 0 ? `${c.uses}/${c.maxUses}` : `${c.uses}/∞`;
     embed.addFields({
       name:  `\`${c.code}\` — ${fmt(c.reward)}`,
@@ -941,8 +1092,8 @@ async function cmdCodes(i) {
 async function cmdSetCodeChannel(i) {
   if (!await guardAdmin(i)) return;
   const channel = i.options.getChannel('channel');
-  dbSetCodeChannel(channel.id);
-  return i.reply({ embeds: [adminEmbed(`✅ Code announcement channel set to <#${channel.id}>`)] });
+  await dbSetCodeChannel(channel.id);
+  return i.reply({ embeds: [adminEmbed(`✅ Default code channel set to <#${channel.id}>`)] });
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -952,16 +1103,16 @@ async function cmdSetCodeChannel(i) {
 async function cmdUserinfo(i) {
   const target  = i.options.getMember('user') || i.member;
   const user    = target.user;
-  const warns   = dbGetWarnings(user.id).length;
-  const balance = getUser(user.id, user.username).balance;
+  const warns   = (await dbGetWarnings(user.id)).length;
+  const balance = (await getUser(user.id, user.username)).balance;
   const roles   = target.roles.cache.filter(r => r.id !== i.guild.id).map(r => `<@&${r.id}>`).join(', ') || 'None';
   return i.reply({
     embeds: [new EmbedBuilder().setColor(target.displayHexColor || 0x7289da).setTitle(`👤 ${user.tag}`)
       .setThumbnail(user.displayAvatarURL({ size: 256 }))
       .addFields(
-        { name: '🪪 ID',      value: user.id,          inline: true },
-        { name: '💰 Balance', value: fmt(balance),      inline: true },
-        { name: '⚠️ Warns',  value: `${warns}`,        inline: true },
+        { name: '🪪 ID',      value: user.id,     inline: true },
+        { name: '💰 Balance', value: fmt(balance), inline: true },
+        { name: '⚠️ Warns',  value: `${warns}`,   inline: true },
         { name: `🎭 Roles (${target.roles.cache.size - 1})`, value: roles.length > 1024 ? 'Too many to display' : roles, inline: false },
       )],
   });
@@ -989,16 +1140,16 @@ async function cmdServerinfo(i) {
 
 async function cmdShowStock(i) {
   if (!await guardAdmin(i)) return;
-  const channel = i.options.getChannel('channel');
-  const amount  = i.options.getInteger('amount');
-  const embed   = buildStockEmbed(amount, i.user);
-  const existing = dbGetStockMsg(channel.id);
+  const channel  = i.options.getChannel('channel');
+  const amount   = i.options.getInteger('amount');
+  const embed    = buildStockEmbed(amount, i.user);
+  const existing = await dbGetStockMsg(channel.id);
   if (existing) {
     try { const msg = await channel.messages.fetch(existing); await msg.edit({ embeds: [embed] }); return i.reply({ content: `✅ Stock updated in <#${channel.id}> → **${amount.toLocaleString()}**`, ephemeral: true }); }
     catch { /* post fresh */ }
   }
   const msg = await channel.send({ embeds: [embed] });
-  dbSetStockMsg(channel.id, msg.id);
+  await dbSetStockMsg(channel.id, msg.id);
   return i.reply({ content: `✅ Stock embed posted in <#${channel.id}> → **${amount.toLocaleString()}**`, ephemeral: true });
 }
 
@@ -1006,28 +1157,28 @@ async function cmdSetStock(i) {
   if (!await guardAdmin(i)) return;
   const channel  = i.options.getChannel('channel');
   const amount   = i.options.getInteger('amount');
-  const existing = dbGetStockMsg(channel.id);
+  const existing = await dbGetStockMsg(channel.id);
   if (!existing) return i.reply({ content: `❌ No stock embed in <#${channel.id}>. Use \`/show-stock\` first.`, ephemeral: true });
   try {
     const msg = await channel.messages.fetch(existing);
     await msg.edit({ embeds: [buildStockEmbed(amount, i.user)] });
     return i.reply({ content: `✅ Stock updated → **${amount.toLocaleString()}** in <#${channel.id}>`, ephemeral: true });
   } catch {
-    dbSetStockMsg(channel.id, null);
+    await dbSetStockMsg(channel.id, null);
     return i.reply({ content: `❌ Embed not found. Use \`/show-stock\` to post a new one.`, ephemeral: true });
   }
 }
 
 function buildStockEmbed(amount, updatedBy) {
-  const oos   = amount === 0;
-  const low   = amount > 0 && amount < 100;
+  const oos    = amount === 0;
+  const low    = amount > 0 && amount < 100;
   const color  = oos ? 0xff4444 : low ? 0xffaa00 : 0x00e676;
   const status = oos ? '🔴 **OUT OF STOCK**' : low ? '🟡 **LOW STOCK**' : '🟢 **IN STOCK**';
   return new EmbedBuilder().setColor(color).setTitle('📦 STOCK')
     .setDescription(`${status}\n\u200B`)
     .addFields(
       { name: 'Amount in Stock', value: `\`\`\`${amount.toLocaleString()}\`\`\``, inline: false },
-      { name: '🛒 How to Buy',   value: '`/shop` then `/buy <item>`',             inline: true  },
+      { name: '🛒 How to Buy',   value: '`/shop` then `/buy <item>`',             inline: true },
     )
     .setFooter({ text: `Last updated by ${updatedBy?.username ?? 'Admin'}` });
 }
@@ -1040,30 +1191,32 @@ async function cmdGiveCoin(i) {
   if (!await guardOwner(i)) return;
   const target = i.options.getUser('user');
   const amount = i.options.getInteger('amount');
-  dbAddCoins(target.id, target.username, amount);
-  return i.reply({ embeds: [adminEmbed(`✅ Added ${fmt(amount)} to **${target.username}**\nNew balance: ${fmt(getUser(target.id).balance)}`)] });
+  await dbAddCoins(target.id, target.username, amount);
+  const newBal = (await getUser(target.id)).balance;
+  return i.reply({ embeds: [adminEmbed(`✅ Added ${fmt(amount)} to **${target.username}**\nNew balance: ${fmt(newBal)}`)] });
 }
 
 async function cmdRemoveCoin(i) {
   if (!await guardOwner(i)) return;
   const target = i.options.getUser('user');
   const amount = i.options.getInteger('amount');
-  dbRemoveCoins(target.id, amount);
-  return i.reply({ embeds: [adminEmbed(`✅ Removed ${fmt(amount)} from **${target.username}**\nNew balance: ${fmt(getUser(target.id).balance)}`)] });
+  await dbRemoveCoins(target.id, amount);
+  const newBal = (await getUser(target.id)).balance;
+  return i.reply({ embeds: [adminEmbed(`✅ Removed ${fmt(amount)} from **${target.username}**\nNew balance: ${fmt(newBal)}`)] });
 }
 
 async function cmdSetCoins(i) {
   if (!await guardAdmin(i)) return;
   const target = i.options.getUser('user');
   const amount = i.options.getInteger('amount');
-  dbSetCoins(target.id, target.username, amount);
+  await dbSetCoins(target.id, target.username, amount);
   return i.reply({ embeds: [adminEmbed(`✅ Set **${target.username}**'s balance to ${fmt(amount)}`)] });
 }
 
 async function cmdResetDaily(i) {
   if (!await guardAdmin(i)) return;
   const target = i.options.getUser('user');
-  dbSetLastDaily(target.id, 0);
+  await dbSetLastDaily(target.id, 0);
   return i.reply({ embeds: [adminEmbed(`✅ Reset daily for **${target.username}**`)] });
 }
 
@@ -1079,14 +1232,14 @@ async function cmdAddItem(i) {
     emoji: i.options.getString('emoji') || '📦',
     stock: i.options.getInteger('stock') ?? -1,
   };
-  dbAddShopItem(item);
+  await dbAddShopItem(item);
   return i.reply({ embeds: [adminEmbed(`✅ Added **${item.emoji} ${item.name}** — ${fmt(item.price)} (Stock: ${item.stock === -1 ? '∞' : item.stock})`)] });
 }
 
 async function cmdRemoveItem(i) {
   if (!await guardAdmin(i)) return;
   const name = i.options.getString('name');
-  const ok   = dbRemoveShopItem(name);
+  const ok   = await dbRemoveShopItem(name);
   if (!ok) return i.reply({ content: '❌ Item not found.', ephemeral: true });
   return i.reply({ embeds: [adminEmbed(`✅ Removed **${name}** from the shop`)] });
 }
@@ -1095,14 +1248,14 @@ async function cmdGiveItem(i) {
   if (!await guardAdmin(i)) return;
   const target = i.options.getUser('user');
   const item   = i.options.getString('item');
-  dbAddInventory(target.id, item);
+  await dbAddInventory(target.id, item);
   return i.reply({ embeds: [adminEmbed(`✅ Gave **${item}** to **${target.username}**`)] });
 }
 
 async function cmdClearInventory(i) {
   if (!await guardAdmin(i)) return;
   const target = i.options.getUser('user');
-  dbClearInventory(target.id);
+  await dbClearInventory(target.id);
   return i.reply({ embeds: [adminEmbed(`✅ Cleared **${target.username}**'s inventory`)] });
 }
 
@@ -1114,7 +1267,7 @@ async function cmdWarn(i) {
   if (!await guardAdmin(i)) return;
   const target = i.options.getUser('user');
   const reason = i.options.getString('reason');
-  const count  = dbAddWarning(target.id, target.username, reason, i.user.tag);
+  const count  = await dbAddWarning(target.id, target.username, reason, i.user.tag);
   try {
     await target.send({
       embeds: [new EmbedBuilder().setColor(0xffaa00).setTitle(`⚠️ You have been warned in ${i.guild.name}`)
@@ -1127,7 +1280,7 @@ async function cmdWarn(i) {
 async function cmdWarnings(i) {
   if (!await guardAdmin(i)) return;
   const target   = i.options.getUser('user');
-  const warnings = dbGetWarnings(target.id);
+  const warnings = await dbGetWarnings(target.id);
   if (!warnings.length) return i.reply({
     embeds: [new EmbedBuilder().setColor(0x00ff88).setTitle(`⚠️ ${target.username}'s Warnings`).setDescription('No warnings on record.')],
   });
@@ -1140,7 +1293,7 @@ async function cmdWarnings(i) {
 async function cmdClearWarnings(i) {
   if (!await guardAdmin(i)) return;
   const target = i.options.getUser('user');
-  dbClearWarnings(target.id);
+  await dbClearWarnings(target.id);
   return i.reply({ embeds: [adminEmbed(`✅ Cleared all warnings for **${target.username}**`)] });
 }
 
@@ -1153,7 +1306,8 @@ async function cmdTimeout(i) {
   if (target.id === i.user.id) return i.reply({ content: "❌ Can't timeout yourself.", ephemeral: true });
   if (!target.moderatable) return i.reply({ content: '❌ I cannot timeout this user.', ephemeral: true });
   await target.timeout(minutes * 60 * 1000, reason);
-  return i.reply({ embeds: [modEmbed('🔇 User Timed Out', `**User:** ${target.user.tag}\n**Duration:** ${minutes} minute(s)\n**Reason:** ${reason}\n**By:** ${i.user.tag}`, 0xff8800)] });
+  const unmuteTs = Math.floor((Date.now() + minutes * 60 * 1000) / 1000);
+  return i.reply({ embeds: [modEmbed('🔇 User Timed Out', `**User:** ${target.user.tag}\n**Duration:** ${minutes} minute(s)\n**Expires:** <t:${unmuteTs}:R> \u2014 <t:${unmuteTs}:F>\n**Reason:** ${reason}\n**By:** ${i.user.tag}`, 0xff8800)] });
 }
 
 async function cmdUntimeout(i) {
@@ -1194,9 +1348,7 @@ async function cmdUnban(i) {
   try {
     await i.guild.members.unban(userId, reason);
     return i.reply({ embeds: [modEmbed('✅ User Unbanned', `**User ID:** ${userId}\n**Reason:** ${reason}\n**By:** ${i.user.tag}`, 0x00ff88)] });
-  } catch {
-    return i.reply({ content: "❌ Couldn't unban — invalid ID or user isn't banned.", ephemeral: true });
-  }
+  } catch { return i.reply({ content: "❌ Couldn't unban — invalid ID or user isn't banned.", ephemeral: true }); }
 }
 
 async function cmdPurge(i) {
@@ -1224,7 +1376,7 @@ async function cmdLock(i) {
   const channel = i.options.getChannel('channel') || i.channel;
   const reason  = i.options.getString('reason') || 'No reason provided';
   await channel.permissionOverwrites.edit(i.guild.roles.everyone, { SendMessages: false });
-  return i.reply({ embeds: [modEmbed('🔒 Channel Locked', `<#${channel.id}> has been locked.\n**Reason:** ${reason}`, 0xff4444)] });
+  return i.reply({ embeds: [modEmbed('🔒 Channel Locked', `<#${channel.id}> locked.\n**Reason:** ${reason}`, 0xff4444)] });
 }
 
 async function cmdUnlock(i) {
@@ -1258,31 +1410,11 @@ async function cmdHelp(i) {
     embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle(`${COIN} Coin Bot — Commands`)
       .setDescription('Here\'s everything you can do!\n\u200B')
       .addFields(
-        { name: '💰 Economy', inline: false, value: [
-          '`/balance [user]` — Check your or someone\'s balance',
-          '`/daily` — Claim 100 free coins every 24h',
-          '`/pay <user> <amount>` — Send coins (Verified role required)',
-          '`/leaderboard` — Top 10 richest users',
-        ].join('\n') },
-        { name: '🎰 Gambling', inline: false, value: [
-          '`/coinflip <heads|tails> <bet>` — 50/50, win 2×',
-          '`/slots <bet>` — Spin the slots (up to 20× jackpot!)',
-          '`/blackjack <bet>` — Hit, Stand or Double Down',
-        ].join('\n') },
-        { name: '🛒 Shop', inline: false, value: [
-          '`/shop` — Browse the coin shop',
-          '`/buy <item>` — Buy an item',
-          '`/inventory [user]` — View your items',
-          '`/use <item>` — Redeem an item (opens a form)',
-        ].join('\n') },
-        { name: '🎟️ Codes', inline: false, value: [
-          '`/redeem-code <code>` — Redeem a code for coins',
-        ].join('\n') },
-        { name: 'ℹ️ Info', inline: false, value: [
-          '`/userinfo [user]` — View info about a user',
-          '`/serverinfo` — View server stats',
-          '`/help` — This menu',
-        ].join('\n') },
+        { name: '💰 Economy', inline: false, value: ['`/balance [user]` — Check balance', '`/daily` — Claim 100 free coins every 24h', '`/pay <user> <amount>` — Send coins (Verified role required)', '`/leaderboard` — Top 10 richest users'].join('\n') },
+        { name: '🎰 Gambling', inline: false, value: ['`/coinflip <heads|tails> <bet>` — 50/50, win 2×', '`/slots <bet>` — Spin the slots (up to 20× jackpot!)', '`/blackjack <bet>` — Hit, Stand or Double Down'].join('\n') },
+        { name: '🛒 Shop', inline: false, value: ['`/shop` — Browse the shop', '`/buy <item>` — Buy an item', '`/inventory [user]` — View your items', '`/use <item>` — Redeem an item (enter Roblox username)'].join('\n') },
+        { name: '🎟️ Codes', inline: false, value: ['`/redeem-code <code>` — Redeem a code for coins'].join('\n') },
+        { name: 'ℹ️ Info', inline: false, value: ['`/userinfo [user]` — View user info', '`/serverinfo` — View server stats', '`/help` — This menu'].join('\n') },
       )
       .setFooter({ text: '1 message = 1 Coin' })],
   });
@@ -1294,48 +1426,12 @@ async function cmdAdminHelp(i) {
     embeds: [new EmbedBuilder().setColor(0xff4444).setTitle('🔧 Admin Commands')
       .setDescription('Requires **Admin Perm** role or **Administrator** permission.\n\u200B')
       .addFields(
-        { name: '📦 Stock', inline: false, value: [
-          '`/show-stock <channel> <amount>` — Post stock embed',
-          '`/set-stock <channel> <amount>` — Update existing stock embed',
-        ].join('\n') },
-        { name: '🎟️ Codes', inline: false, value: [
-          '`/drop-code <code> <reward> <minutes>` — Drop a timed code',
-          '`/make-code <code> <reward>` — Create a permanent code',
-          '`/remove-code <code>` — Delete a code',
-          '`/codes` — View all active codes',
-          '`/set-code-channel <channel>` — Set default announce channel',
-        ].join('\n') },
-        { name: '💰 Economy', inline: false, value: [
-          '`/givecoin <user> <amount>` — Add coins [Owner/Co-Owner]',
-          '`/removecoin <user> <amount>` — Remove coins [Owner/Co-Owner]',
-          '`/setcoins <user> <amount>` — Set exact balance',
-          '`/resetdaily <user>` — Reset daily cooldown',
-        ].join('\n') },
-        { name: '🛒 Shop', inline: false, value: [
-          '`/additem <name> <price> <desc>` — Add custom shop item',
-          '`/removeitem <name>` — Remove shop item',
-          '`/giveitem <user> <item>` — Give item directly',
-          '`/clearinventory <user>` — Wipe user\'s inventory',
-        ].join('\n') },
-        { name: '📋 Redemptions', inline: false, value: [
-          '`/check-redeems` — View pending redemptions',
-          '`/finish-redeem <id>` — Mark done & DM user',
-        ].join('\n') },
-        { name: '🔨 Moderation', inline: false, value: [
-          '`/warn <user> <reason>` — Warn a user',
-          '`/warnings <user>` — View warnings',
-          '`/clearwarnings <user>` — Clear warnings',
-          '`/timeout <user> <minutes>` — Timeout a user',
-          '`/untimeout <user>` — Remove timeout',
-          '`/kick <user>` — Kick from server',
-          '`/ban <user>` — Ban from server',
-          '`/unban <userid>` — Unban by ID',
-          '`/purge <amount>` — Bulk delete messages',
-          '`/slowmode <seconds>` — Set channel slowmode',
-          '`/lock [channel]` — Lock a channel',
-          '`/unlock [channel]` — Unlock a channel',
-          '`/announce <channel> <title> <msg>` — Send announcement',
-        ].join('\n') },
+        { name: '📦 Stock', inline: false, value: ['`/show-stock <channel> <amount>` — Post stock embed', '`/set-stock <channel> <amount>` — Update stock embed'].join('\n') },
+        { name: '🎟️ Codes', inline: false, value: ['`/drop-code <code> <reward> <minutes> [channel]` — Drop timed code', '`/make-code <code> <reward> [channel]` — Permanent code', '`/remove-code <code> [channel]` — Delete a code', '`/codes` — View all active codes', '`/set-code-channel <channel>` — Set default announce channel'].join('\n') },
+        { name: '💰 Economy', inline: false, value: ['`/givecoin <user> <amount>` — Add coins [Owner/Co-Owner]', '`/removecoin <user> <amount>` — Remove coins [Owner/Co-Owner]', '`/setcoins <user> <amount>` — Set exact balance', '`/resetdaily <user>` — Reset daily cooldown'].join('\n') },
+        { name: '🛒 Shop', inline: false, value: ['`/additem <name> <price> <desc>` — Add shop item', '`/removeitem <name>` — Remove shop item', '`/giveitem <user> <item>` — Give item directly', '`/clearinventory <user>` — Wipe inventory'].join('\n') },
+        { name: '📋 Redemptions', inline: false, value: ['`/check-redeems` — View pending redemptions', '`/finish-redeem <id>` — Mark done & DM user'].join('\n') },
+        { name: '🔨 Moderation', inline: false, value: ['`/warn` `/warnings` `/clearwarnings`', '`/timeout` `/untimeout`', '`/kick` `/ban` `/unban`', '`/purge` `/slowmode` `/lock` `/unlock` `/announce`'].join('\n') },
       )
       .setFooter({ text: 'Admin Perm role or Administrator permission required' })],
     ephemeral: true,
@@ -1375,8 +1471,11 @@ function handStr(h) { return h.map(c => c.display).join(' '); }
 // ══════════════════════════════════════════════════════════════════
 client.once('ready', async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
+  await loadDB(); // warm up cache
   await registerCommands();
   client.user.setActivity('Coin Economy | /shop', { type: 3 });
+  // Check code expiry every 30 seconds
+  setInterval(checkCodeExpiry, 30 * 1000);
 });
 
 client.login(process.env.DISCORD_TOKEN);
