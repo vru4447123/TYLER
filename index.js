@@ -348,14 +348,28 @@ const client = new Client({
 // ── Register commands ─────────────────────────────────────────────
 async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-  console.log(`📡 Registering ${commands.length} commands globally...`);
+
+  // Step 1: Wipe ALL global commands first
+  console.log('🧹 Clearing old global commands...');
   try {
-    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
-    console.log('✅ Global commands registered.');
+    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: [] });
+    console.log('✅ Global commands cleared.');
   } catch (err) {
-    console.error('❌ Global register failed:', err.message);
+    console.error('❌ Failed to clear global commands:', err.message);
   }
-  // Also push per-guild for instant availability
+
+  // Step 2: Wipe ALL guild commands in every server
+  for (const [guildId] of client.guilds.cache) {
+    try {
+      await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId), { body: [] });
+      console.log(`🧹 Guild ${guildId} commands cleared.`);
+    } catch (err) {
+      console.error(`❌ Failed to clear guild ${guildId}:`, err.message);
+    }
+  }
+
+  // Step 3: Register fresh commands per-guild (instant, no 1hr wait)
+  console.log(`📡 Registering ${commands.length} fresh commands...`);
   for (const [guildId] of client.guilds.cache) {
     try {
       await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId), { body: commands });
@@ -364,6 +378,7 @@ async function registerCommands() {
       console.error(`❌ Guild ${guildId} failed:`, err.message);
     }
   }
+  console.log('✅ All commands registered fresh!');
 }
 
 // ══════════════════════════════════════════════════════════════════
