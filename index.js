@@ -437,6 +437,9 @@ const commands = [
   // Help
   new SlashCommandBuilder().setName('help').setDescription('View all commands'),
   new SlashCommandBuilder().setName('adminhelp').setDescription('[Admin] View all admin commands'),
+  new SlashCommandBuilder().setName('tutorial').setDescription('How to use the bot — setup guide for new users'),
+  new SlashCommandBuilder().setName('admin-tutorial').setDescription('How to set up admin roles and permissions'),
+  new SlashCommandBuilder().setName('owner-tutorial').setDescription('Full bot guide — only for the bot owner'),
 ].map(c => c.toJSON());
 
 // ══════════════════════════════════════════════════════════════════
@@ -542,6 +545,9 @@ client.on('interactionCreate', async interaction => {
       case 'announce':         return cmdAnnounce(interaction);
       case 'help':             return cmdHelp(interaction);
       case 'adminhelp':        return cmdAdminHelp(interaction);
+      case 'tutorial':         return cmdTutorial(interaction);
+      case 'admin-tutorial':   return cmdAdminTutorial(interaction);
+      case 'owner-tutorial':   return cmdOwnerTutorial(interaction);
     }
   } catch (err) {
     console.error(`Error in /${interaction.commandName}:`, err);
@@ -1436,6 +1442,576 @@ async function cmdAdminHelp(i) {
       .setFooter({ text: 'Admin Perm role or Administrator permission required' })],
     ephemeral: true,
   });
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  TUTORIAL COMMANDS
+// ══════════════════════════════════════════════════════════════════
+
+async function cmdTutorial(i) {
+  return i.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle('📖 Bot Tutorial — Getting Started')
+        .setDescription('Welcome! Here\'s everything you need to know to get started.
+​')
+        .addFields(
+          {
+            name: '🪙 Step 1 — Earn Coins',
+            value: [
+              'Simply **send messages** in any channel — every message gives you **1 coin** automatically.',
+              'You can also use `/daily` once every 24 hours to claim **100 free coins**.',
+              'Use `/balance` at any time to check how many coins you have.',
+            ].join('
+'),
+            inline: false,
+          },
+          {
+            name: '🛒 Step 2 — Buy Items',
+            value: [
+              'Use `/shop` to see all available items and their prices.',
+              'Once you have enough coins, use `/buy <item name>` to purchase it.',
+              'Your purchased items will appear in `/inventory`.',
+            ].join('
+'),
+            inline: false,
+          },
+          {
+            name: '📦 Step 3 — Redeem Your Item',
+            value: [
+              'Use `/use <item name>` to redeem an item from your inventory.',
+              'A form will pop up asking for your **Roblox Username**.',
+              'Fill it in and submit — staff will process your request and DM you when done.',
+              'You can check your request status by asking staff.',
+            ].join('
+'),
+            inline: false,
+          },
+          {
+            name: '🎰 Step 4 — Gambling (Optional)',
+            value: [
+              '`/coinflip <heads|tails> <bet>` — 50/50 chance to double your coins.',
+              '`/slots <bet>` — Spin the slots for up to **20× your bet** on a jackpot!',
+              '`/blackjack <bet>` — Play Blackjack with Hit, Stand, and Double Down.',
+              '⚠️ Only bet what you can afford to lose!',
+            ].join('
+'),
+            inline: false,
+          },
+          {
+            name: '🎟️ Step 5 — Codes',
+            value: [
+              'Staff sometimes drop codes in the server.',
+              'Use `/redeem-code <code>` to claim free coins.',
+              'Each code can only be redeemed **once per person**.',
+            ].join('
+'),
+            inline: false,
+          },
+          {
+            name: '💸 Sending Coins',
+            value: [
+              'If you have the **Verified** role, you can send coins to others.',
+              'Use `/pay <@user> <amount>` to transfer coins.',
+            ].join('
+'),
+            inline: false,
+          },
+          {
+            name: '📊 Other Useful Commands',
+            value: [
+              '`/leaderboard` — See the top 10 richest users',
+              '`/userinfo [user]` — View info about yourself or someone else',
+              '`/serverinfo` — View server stats',
+              '`/help` — Full command list',
+            ].join('
+'),
+            inline: false,
+          },
+        )
+        .setFooter({ text: 'Need help? Ask a staff member!' }),
+    ],
+  });
+}
+
+async function cmdAdminTutorial(i) {
+  return i.reply({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0xff4444)
+        .setTitle('🔧 Admin Setup Tutorial')
+        .setDescription('How to set up admin roles and use admin commands.
+​')
+        .addFields(
+          {
+            name: '👑 Step 1 — Create the Admin Role',
+            value: [
+              '1. Go to your **Server Settings** → **Roles**',
+              '2. Click **"Create Role"**',
+              '3. Name it exactly: **`Admin Perm`**',
+              '> ⚠️ The name must be exactly `Admin Perm` (case-insensitive) for the bot to recognise it.',
+              '4. Give the role whatever Discord permissions you want (e.g. Manage Messages, Kick Members etc.)',
+              '5. Click **Save Changes**',
+            ].join('
+'),
+            inline: false,
+          },
+          {
+            name: '👤 Step 2 — Assign the Role',
+            value: [
+              '1. Right-click a member in the server',
+              '2. Click **"Roles"**',
+              '3. Toggle on **`Admin Perm`**',
+              'That member can now use all admin bot commands.',
+              '',
+              '> Alternatively: users with Discord\'s built-in **Administrator** permission also get full access automatically.',
+            ].join('
+'),
+            inline: false,
+          },
+          {
+            name: '👑 Step 3 — Owner / Co-Owner Role',
+            value: [
+              'Create a role named exactly **`Owner`** or **`Co Owner`** (or `Co-Owner`).',
+              'Members with this role can use `/givecoin` and `/removecoin`.',
+              'These are separate from the Admin Perm role — you can have both.',
+            ].join('
+'),
+            inline: false,
+          },
+          {
+            name: '✅ Step 4 — Verified Role (for /pay)',
+            value: [
+              'Create a role named exactly **`Verified`**.',
+              'Only members with this role can use `/pay` to send coins to others.',
+              'This prevents random users from transferring coins freely.',
+            ].join('
+'),
+            inline: false,
+          },
+          {
+            name: '📋 Step 5 — Set Up Code Announcements',
+            value: [
+              'Use `/set-code-channel <#channel>` to set a default channel for code drops.',
+              'When you use `/drop-code` or `/make-code`, the bot will announce there by default.',
+              'You can override it per-command with the optional `channel` argument.',
+            ].join('
+'),
+            inline: false,
+          },
+          {
+            name: '📦 Step 6 — Manage the Shop',
+            value: [
+              '`/additem <name> <price> <description>` — Add a custom item',
+              '`/removeitem <name>` — Remove an item',
+              '`/giveitem <user> <item>` — Give an item directly to someone',
+              'The default shop packages (125m Brainrot etc.) are always there and cannot be removed.',
+            ].join('
+'),
+            inline: false,
+          },
+          {
+            name: '📬 Step 7 — Processing Redemptions',
+            value: [
+              'When a user uses `/use <item>`, they fill in their Roblox username.',
+              'Use `/check-redeems` to see all pending requests.',
+              'Once you\'ve sent the item, use `/finish-redeem <id>` to mark it as done.',
+              'The bot will automatically **DM the user** to let them know it\'s been processed.',
+            ].join('
+'),
+            inline: false,
+          },
+          {
+            name: '📢 Other Admin Commands',
+            value: [
+              '`/announce <#channel> <title> <message>` — Send a formatted announcement',
+              '`/show-stock <#channel> <amount>` — Post a live stock embed',
+              '`/set-stock <#channel> <amount>` — Update the stock embed',
+              '`/drop-code <code> <reward> <minutes>` — Drop a timed code',
+              '`/adminhelp` — Full list of every admin command',
+            ].join('
+'),
+            inline: false,
+          },
+        )
+        .setFooter({ text: 'Role names are case-insensitive • Admin Perm | Owner | Co Owner | Verified' }),
+    ],
+    ephemeral: true,
+  });
+}
+
+async function cmdOwnerTutorial(i) {
+  if (i.user.username.toLowerCase() !== 'kosai06913') {
+    return i.reply({ content: '❌ This command is only available to the bot owner.', ephemeral: true });
+  }
+
+  const pages = [
+    new EmbedBuilder()
+      .setColor(0xffd700)
+      .setTitle('📖 Full Bot Guide — Page 1/6 — Roles Setup')
+      .setDescription('Everything you need to know to run this bot. Only you can see this.
+​')
+      .addFields(
+        {
+          name: '👑 Owner / Co-Owner Role',
+          value: [
+            'Create a role named **`Owner`** (for yourself) and/or **`Co Owner`** or **`Co-Owner`** for trusted staff.',
+            'Members with these roles can use:',
+            '• `/givecoin <user> <amount>` — Add coins to anyone',
+            '• `/removecoin <user> <amount>` — Remove coins from anyone',
+            '> These are the most powerful economy commands — only give this role to people you 100% trust.',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '🔧 Admin Perm Role',
+          value: [
+            'Create a role named **`Admin Perm`** (exact name, case-insensitive).',
+            'Members with this role (or Discord's built-in Administrator permission) can use ALL admin commands:',
+            '• `/check-redeems` — View pending redemptions',
+            '• `/finish-redeem <id>` — Mark redemption done + DM user',
+            '• `/drop-code` `/make-code` `/remove-code` `/codes`',
+            '• `/show-stock` `/set-stock` `/announce`',
+            '• `/warn` `/kick` `/ban` `/timeout` `/purge` `/lock` `/slowmode` etc.',
+            '• `/additem` `/removeitem` `/giveitem` `/clearinventory`',
+            '• `/setcoins` `/resetdaily` `/adminhelp`',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '✅ Verified Role',
+          value: [
+            'Create a role named **`Verified`** (exact name, case-insensitive).',
+            'Only members with this role can use `/pay <user> <amount>` to send coins to others.',
+            'Without this role, `/pay` will be blocked.',
+            '> This prevents random unverified users from moving coins around.',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '⚠️ Important Notes on Role Names',
+          value: [
+            'The bot checks role names — they must match **exactly** (case-insensitive):',
+            '• `Admin Perm` → admin commands',
+            '• `Owner` → givecoin / removecoin',
+            '• `Co Owner` or `Co-Owner` → givecoin / removecoin',
+            '• `Verified` → /pay',
+            'You can have multiple roles that qualify — e.g. someone can have both Owner and Admin Perm.',
+          ].join('
+'),
+          inline: false,
+        },
+      )
+      .setFooter({ text: 'Page 1/6 — Roles Setup' }),
+
+    new EmbedBuilder()
+      .setColor(0x00b4ff)
+      .setTitle('📖 Full Bot Guide — Page 2/6 — Coins & Economy')
+      .addFields(
+        {
+          name: '🪙 How Coins Are Earned',
+          value: [
+            '**Messages:** Every message sent in any server channel gives **1 coin** automatically. No cooldown.',
+            '**Daily:** `/daily` gives **100 coins** every 24 hours. The bot shows a Discord timestamp for when the next daily is available.',
+            '**Codes:** Staff can drop codes that give coins — users claim them with `/redeem-code <code>`.',
+            '**Admin add:** `/givecoin <user> <amount>` adds coins directly (Owner/Co-Owner only).',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '💰 Balance & Leaderboard',
+          value: [
+            '`/balance [user]` — Check your own or anyone else's coin balance.',
+            '`/leaderboard` — Shows the top 10 richest users in the server.',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '💸 Transferring Coins',
+          value: [
+            '`/pay <user> <amount>` — Send coins to another user.',
+            '> Only works if the sender has the **Verified** role.',
+            '> Cannot pay yourself or bots.',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '🔧 Admin Economy Commands',
+          value: [
+            '`/givecoin <user> <amount>` — Add coins [Owner/Co-Owner only]',
+            '`/removecoin <user> <amount>` — Remove coins [Owner/Co-Owner only]',
+            '`/setcoins <user> <amount>` — Set exact balance [Admin]',
+            '`/resetdaily <user>` — Reset someone's daily cooldown [Admin]',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '💾 Where Data is Saved',
+          value: [
+            'All data (coins, inventory, warnings, codes, redeems) is saved to **JSONBin**.',
+            'This means data persists even when Railway restarts the bot.',
+            'You need `JSONBIN_BIN_ID` and `JSONBIN_API_KEY` in your Railway env vars.',
+            'Initial bin content: `{"users":{},"warnings":{},"codes":{},"shopItems":[],"stockMessages":{},"codeChannel":null,"redeems":{},"redeemCounter":1}`',
+          ].join('
+'),
+          inline: false,
+        },
+      )
+      .setFooter({ text: 'Page 2/6 — Coins & Economy' }),
+
+    new EmbedBuilder()
+      .setColor(0x00ff88)
+      .setTitle('📖 Full Bot Guide — Page 3/6 — Shop & Redemptions')
+      .addFields(
+        {
+          name: '🛒 Default Shop Packages',
+          value: [
+            'These are hardcoded and always in the shop:',
+            '• **125m Brainrot** — 1,500 coins',
+            '• **150m Brainrot** — 2,000 coins',
+            '• **175m Brainrot** — 2,500 coins',
+            '• **200m Brainrot** — 3,000 coins',
+            '• **100m Garama** — 5,000 coins',
+            'Users buy with `/buy <item name>` — it goes to their `/inventory`.',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '📦 Custom Shop Items (Admin)',
+          value: [
+            '`/additem <name> <price> <description> [emoji] [stock]` — Add a custom item.',
+            '`/removeitem <name>` — Remove a custom item.',
+            '`/giveitem <user> <item>` — Give an item directly without purchase.',
+            '`/clearinventory <user>` — Wipe someone's entire inventory.',
+            '> Stock of `-1` means unlimited.',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '📬 Redemption Flow — Step by Step',
+          value: [
+            '**1.** User buys an item → goes to their inventory.',
+            '**2.** User runs `/use <item name>`.',
+            '**3.** A modal pops up asking for their **Roblox Username** (only field).',
+            '**4.** User submits → bot saves the request with an ID and confirms privately.',
+            '**5.** You (admin) run `/check-redeems` to see all pending requests.',
+            '**6.** After sending the item in-game, run `/finish-redeem <id>`.',
+            '**7.** Bot marks it done and **DMs the user** automatically to confirm.',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '📋 check-redeems Shows',
+          value: [
+            '• Request ID number',
+            '• Discord user (mention + username)',
+            '• Their Roblox username',
+            '• Item they bought',
+            '> Only pending (not yet processed) requests appear.',
+          ].join('
+'),
+          inline: false,
+        },
+      )
+      .setFooter({ text: 'Page 3/6 — Shop & Redemptions' }),
+
+    new EmbedBuilder()
+      .setColor(0xffd700)
+      .setTitle('📖 Full Bot Guide — Page 4/6 — Codes System')
+      .addFields(
+        {
+          name: '🎟️ How Codes Work',
+          value: [
+            'Codes give coins to users who redeem them with `/redeem-code <code>`.',
+            '**Each user can only redeem each code once.**',
+            'Once a code expires (by time or max uses), the announcement message in the channel automatically updates to show ❌ Expired.',
+            'The check runs every 30 seconds.',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '⏰ /drop-code — Timed Code',
+          value: [
+            '`/drop-code <code> <reward> <minutes> [channel] [max_uses]`',
+            '• `code` — The word users type (auto-uppercased)',
+            '• `reward` — How many coins it gives',
+            '• `minutes` — How long until it expires (0 = never expires)',
+            '• `channel` — Where to announce it (overrides default channel)',
+            '• `max_uses` — Max total redemptions (0 = unlimited)',
+            '> The code is shown as a spoiler `||CODE||` in the announcement.',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '📌 /make-code — Permanent Code',
+          value: [
+            '`/make-code <code> <reward> [channel] [max_uses]`',
+            'Same as drop-code but never expires by time.',
+            'Still expires if max_uses is hit.',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '🗑️ /remove-code — Delete a Code',
+          value: [
+            '`/remove-code <code> [channel]`',
+            'Removes the code from the database immediately.',
+            'Optionally announces the removal in a channel.',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '📡 Default Code Channel',
+          value: [
+            '`/set-code-channel <#channel>` — Sets the default channel for all code announcements.',
+            'You can override it per command with the optional `channel` argument.',
+            '`/codes` — Lists all currently active codes (admin only).',
+          ].join('
+'),
+          inline: false,
+        },
+      )
+      .setFooter({ text: 'Page 4/6 — Codes System' }),
+
+    new EmbedBuilder()
+      .setColor(0xff8800)
+      .setTitle('📖 Full Bot Guide — Page 5/6 — Gambling & Stock')
+      .addFields(
+        {
+          name: '🪙 /coinflip',
+          value: [
+            '`/coinflip <heads|tails> <bet>`',
+            '50/50 chance. Win = get your bet back + same amount (2× total).',
+            'Lose = lose your bet.',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '🎰 /slots',
+          value: [
+            '`/slots <bet>`',
+            'Spin 3 reels. Payouts:',
+            '• Three 7️⃣ → **20× jackpot**',
+            '• Three 💎 → 10×',
+            '• Three ⭐ → 5×',
+            '• Three of anything else → 3×',
+            '• Two of a kind → 1.5×',
+            '• No match → lose bet',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '🃏 /blackjack',
+          value: [
+            '`/blackjack <bet>`',
+            'Standard Blackjack rules. Buttons appear for Hit / Stand / Double Down.',
+            '• Natural 21 → win 2.5×',
+            '• Beat dealer → win 2×',
+            '• Push (tie) → bet returned',
+            '• Bust or dealer wins → lose bet',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '📦 Stock Embeds',
+          value: [
+            '`/show-stock <#channel> <amount>` — Posts a live stock embed. Shows 🟢 IN STOCK, 🟡 LOW STOCK, or 🔴 OUT OF STOCK.',
+            '`/set-stock <#channel> <amount>` — Updates the existing embed with a new amount.',
+            '> The embed is stored by channel ID so it always edits the same message.',
+          ].join('
+'),
+          inline: false,
+        },
+      )
+      .setFooter({ text: 'Page 5/6 — Gambling & Stock' }),
+
+    new EmbedBuilder()
+      .setColor(0xff4444)
+      .setTitle('📖 Full Bot Guide — Page 6/6 — Moderation & Setup')
+      .addFields(
+        {
+          name: '🔨 Moderation Commands (Admin Perm required)',
+          value: [
+            '`/warn <user> <reason>` — Warn a user. They get a DM. Stored in database.',
+            '`/warnings <user>` — View all warnings for a user.',
+            '`/clearwarnings <user>` — Delete all warnings.',
+            '`/timeout <user> <minutes> [reason]` — Mute a user. Shows Discord timestamp for when it ends.',
+            '`/untimeout <user>` — Remove a timeout.',
+            '`/kick <user> [reason]` — Kick. DMs the user before kicking.',
+            '`/ban <user> [reason] [delete_days]` — Ban. DMs the user before banning.',
+            '`/unban <userid> [reason]` — Unban by Discord user ID.',
+            '`/purge <amount> [user]` — Bulk delete up to 100 messages. Can filter by user.',
+            '`/slowmode <seconds> [#channel]` — Set slowmode (0 = off).',
+            '`/lock [#channel] [reason]` — Prevent @everyone from sending messages.',
+            '`/unlock [#channel]` — Re-enable sending.',
+            '`/announce <#channel> <title> <message> [color]` — Send a formatted embed announcement.',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '⚙️ Railway Environment Variables',
+          value: [
+            'You need these set in Railway (no .env file needed on Railway):',
+            '• `DISCORD_TOKEN` — Your bot token from Discord Developer Portal',
+            '• `CLIENT_ID` — Your application's client ID',
+            '• `JSONBIN_BIN_ID` — The bin ID from jsonbin.io',
+            '• `JSONBIN_API_KEY` — Your JSONBin secret key ($2a$10$...)',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '🚀 Command Registration',
+          value: [
+            'Every time the bot starts, it:',
+            '1. Clears ALL old global commands',
+            '2. Clears ALL old guild (server) commands',
+            '3. Registers fresh commands per guild (instant, no 1hr wait)',
+            '> This prevents duplicate commands showing up.',
+          ].join('
+'),
+          inline: false,
+        },
+        {
+          name: '📖 Help Commands (for everyone)',
+          value: [
+            '`/help` — Shows all user-facing commands',
+            '`/adminhelp` — Shows all admin commands (Admin Perm required)',
+            '`/tutorial` — General bot guide for regular users',
+            '`/admin-tutorial` — Role setup guide for admins (ephemeral)',
+            '`/owner-tutorial` — This full guide (only you, kosai06913)',
+          ].join('
+'),
+          inline: false,
+        },
+      )
+      .setFooter({ text: 'Page 6/6 — You know everything now! 🎉' }),
+  ];
+
+  // Send all 6 pages
+  await i.reply({ embeds: [pages[0]], ephemeral: true });
+  for (let idx = 1; idx < pages.length; idx++) {
+    await i.followUp({ embeds: [pages[idx]], ephemeral: true });
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
