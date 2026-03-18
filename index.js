@@ -469,16 +469,16 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// Register slash commands + login
+// Register GLOBAL slash commands on ready (no GUILD_ID needed)
 client.once('ready', async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   try {
     await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+      Routes.applicationCommands(process.env.CLIENT_ID),
       { body: commands.map(c => c.data.toJSON()) }
     );
-    console.log('✅ Slash commands registered!');
+    console.log('✅ Global slash commands registered! (may take up to 1 hour to appear)');
   } catch (err) {
     console.error(err);
   }
