@@ -261,21 +261,30 @@ const SHOP_PACKAGES = [
 // ══════════════════════════════════════════════════════════════════
 //  PERMISSION GUARDS
 // ══════════════════════════════════════════════════════════════════
+function stripRole(name) {
+  // Remove emojis, symbols, pipes, dashes, extra spaces — keep only plain letters/numbers
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')  // replace non-alphanumeric with space
+    .replace(/\s+/g, ' ')          // collapse multiple spaces
+    .trim();
+}
+
 function isAdmin(member) {
   if (!member) return false;
   if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
-  return member.roles.cache.some(r => r.name.toLowerCase().includes('admin perm'));
+  return member.roles.cache.some(r => stripRole(r.name).includes('admin perm'));
 }
 function isOwnerOrCoOwner(member) {
   if (!member) return false;
   return member.roles.cache.some(r => {
-    const n = r.name.toLowerCase();
-    return n === 'owner' || n === 'co owner' || n === 'co-owner';
+    const n = stripRole(r.name);
+    return n === 'owner' || n.includes('co owner') || n.includes('co-owner') || n.includes('coowner');
   });
 }
 function isVerified(member) {
   if (!member) return false;
-  return member.roles.cache.some(r => r.name.toLowerCase() === 'verified');
+  return member.roles.cache.some(r => stripRole(r.name) === 'verified');
 }
 async function guardAdmin(i) {
   if (!isAdmin(i.member)) {
