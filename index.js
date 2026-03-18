@@ -3,7 +3,7 @@ const {
   SlashCommandBuilder, EmbedBuilder,
   ActionRowBuilder, ButtonBuilder, ButtonStyle,
   ModalBuilder, TextInputBuilder, TextInputStyle,
-  PermissionFlagsBits,
+  PermissionFlagsBits, MessageFlags,
 } = require('discord.js');
 require('dotenv').config();
 
@@ -280,7 +280,7 @@ function isVerified(member) {
 async function guardAdmin(i) {
   if (!isAdmin(i.member)) {
     await i.reply({ embeds: [new EmbedBuilder().setColor(0xff4444).setTitle('🚫 Access Denied')
-      .setDescription('You need the **Admin Perm** role or **Administrator** permission.')], ephemeral: true });
+      .setDescription('You need the **Admin Perm** role or **Administrator** permission.')], flags: MessageFlags.Ephemeral });
     return false;
   }
   return true;
@@ -288,7 +288,7 @@ async function guardAdmin(i) {
 async function guardOwner(i) {
   if (!isOwnerOrCoOwner(i.member)) {
     await i.reply({ embeds: [new EmbedBuilder().setColor(0xff4444).setTitle('🚫 Access Denied')
-      .setDescription('Only **Owner** or **Co-Owner** can use this.')], ephemeral: true });
+      .setDescription('Only **Owner** or **Co-Owner** can use this.')], flags: MessageFlags.Ephemeral });
     return false;
   }
   return true;
@@ -551,7 +551,7 @@ client.on('interactionCreate', async interaction => {
     }
   } catch (err) {
     console.error(`Error in /${interaction.commandName}:`, err);
-    const payload = { content: '⚠️ Something went wrong. Please try again.', ephemeral: true };
+    const payload = { content: '⚠️ Something went wrong. Please try again.', flags: MessageFlags.Ephemeral };
     interaction.replied || interaction.deferred ? interaction.followUp(payload) : interaction.reply(payload);
   }
 });
@@ -579,7 +579,7 @@ async function cmdDaily(i) {
     const nextDaily = Math.floor((data.lastDaily + CD) / 1000);
     return i.reply({
       embeds: [new EmbedBuilder().setColor(0xff4444).setTitle('⏰ Already Claimed')
-        .setDescription(`You already claimed your daily!\nCome back <t:${nextDaily}:R> \u2014 <t:${nextDaily}:F>`)], ephemeral: true,
+        .setDescription(`You already claimed your daily!\nCome back <t:${nextDaily}:R> \u2014 <t:${nextDaily}:F>`)], flags: MessageFlags.Ephemeral,
     });
   }
   await dbAddCoins(i.user.id, i.user.username, 100);
@@ -606,14 +606,14 @@ async function cmdLeaderboard(i) {
 
 async function cmdPay(i) {
   if (!isVerified(i.member))
-    return i.reply({ content: '❌ You need the **Verified** role to send coins.', ephemeral: true });
+    return i.reply({ content: '❌ You need the **Verified** role to send coins.', flags: MessageFlags.Ephemeral });
   const target = i.options.getUser('user');
   const amount = i.options.getInteger('amount');
-  if (target.id === i.user.id) return i.reply({ content: "❌ Can't pay yourself!", ephemeral: true });
-  if (target.bot) return i.reply({ content: "❌ Can't pay bots!", ephemeral: true });
+  if (target.id === i.user.id) return i.reply({ content: "❌ Can't pay yourself!", flags: MessageFlags.Ephemeral });
+  if (target.bot) return i.reply({ content: "❌ Can't pay bots!", flags: MessageFlags.Ephemeral });
   const sender = await getUser(i.user.id, i.user.username);
   if (sender.balance < amount)
-    return i.reply({ content: `❌ You only have ${fmt(sender.balance)}.`, ephemeral: true });
+    return i.reply({ content: `❌ You only have ${fmt(sender.balance)}.`, flags: MessageFlags.Ephemeral });
   await dbRemoveCoins(i.user.id, amount);
   await dbAddCoins(target.id, target.username, amount);
   return i.reply({
@@ -631,7 +631,7 @@ async function cmdCoinflip(i) {
   const bet  = i.options.getInteger('bet');
   const user = await getUser(i.user.id, i.user.username);
   if (user.balance < bet)
-    return i.reply({ content: `❌ You only have ${fmt(user.balance)}.`, ephemeral: true });
+    return i.reply({ content: `❌ You only have ${fmt(user.balance)}.`, flags: MessageFlags.Ephemeral });
   const result = Math.random() < 0.5 ? 'heads' : 'tails';
   const won    = result === side;
   won ? await dbAddCoins(i.user.id, i.user.username, bet) : await dbRemoveCoins(i.user.id, bet);
@@ -652,7 +652,7 @@ async function cmdSlots(i) {
   const bet  = i.options.getInteger('bet');
   const user = await getUser(i.user.id, i.user.username);
   if (user.balance < bet)
-    return i.reply({ content: `❌ You only have ${fmt(user.balance)}.`, ephemeral: true });
+    return i.reply({ content: `❌ You only have ${fmt(user.balance)}.`, flags: MessageFlags.Ephemeral });
   const symbols = ['🍒','🍋','🍊','🍇','⭐','💎','7️⃣'];
   const weights = [30, 20, 20, 15, 10, 4, 1];
   function spin() {
@@ -691,7 +691,7 @@ async function cmdBlackjack(i) {
   const bet  = i.options.getInteger('bet');
   const user = await getUser(i.user.id, i.user.username);
   if (user.balance < bet)
-    return i.reply({ content: `❌ You only have ${fmt(user.balance)}.`, ephemeral: true });
+    return i.reply({ content: `❌ You only have ${fmt(user.balance)}.`, flags: MessageFlags.Ephemeral });
   const deck = buildDeck();
   const ph   = [drawCard(deck), drawCard(deck)];
   const dh   = [drawCard(deck), drawCard(deck)];
@@ -718,8 +718,8 @@ async function handleButton(i) {
   if (p[0] !== 'bj') return;
   const action = p[1], userId = p[2];
   const state  = bjGames.get(userId);
-  if (!state) return i.reply({ content: 'No active game.', ephemeral: true });
-  if (i.user.id !== userId) return i.reply({ content: "This isn't your game!", ephemeral: true });
+  if (!state) return i.reply({ content: 'No active game.', flags: MessageFlags.Ephemeral });
+  if (i.user.id !== userId) return i.reply({ content: "This isn't your game!", flags: MessageFlags.Ephemeral });
   await i.deferUpdate();
   if (action === 'double') {
     const u = await getUser(userId, i.user.username);
@@ -810,7 +810,7 @@ async function cmdBuy(i) {
   if (pkg) {
     const user = await getUser(i.user.id, i.user.username);
     if (user.balance < pkg.coins)
-      return i.reply({ content: `❌ Need ${fmt(pkg.coins)} — you have ${fmt(user.balance)}.`, ephemeral: true });
+      return i.reply({ content: `❌ Need ${fmt(pkg.coins)} — you have ${fmt(user.balance)}.`, flags: MessageFlags.Ephemeral });
     await dbRemoveCoins(i.user.id, pkg.coins);
     await dbAddInventory(i.user.id, pkg.name);
     const newBal = (await getUser(i.user.id)).balance;
@@ -821,11 +821,11 @@ async function cmdBuy(i) {
   }
   const items = await dbGetShopItems();
   const item  = items.find(it => it.name.toLowerCase() === input);
-  if (!item) return i.reply({ content: '❌ Item not found. Check `/shop`.', ephemeral: true });
-  if (item.stock === 0) return i.reply({ content: '❌ Out of stock!', ephemeral: true });
+  if (!item) return i.reply({ content: '❌ Item not found. Check `/shop`.', flags: MessageFlags.Ephemeral });
+  if (item.stock === 0) return i.reply({ content: '❌ Out of stock!', flags: MessageFlags.Ephemeral });
   const user = await getUser(i.user.id, i.user.username);
   if (user.balance < item.price)
-    return i.reply({ content: `❌ Need ${fmt(item.price)} — you have ${fmt(user.balance)}.`, ephemeral: true });
+    return i.reply({ content: `❌ Need ${fmt(item.price)} — you have ${fmt(user.balance)}.`, flags: MessageFlags.Ephemeral });
   await dbRemoveCoins(i.user.id, item.price);
   await dbAddInventory(i.user.id, item.name);
   if (item.stock > 0) await dbDecrementStock(item.name);
@@ -857,7 +857,7 @@ async function cmdUse(i) {
   const input = i.options.getString('item').toLowerCase();
   const inv   = await dbGetInventory(i.user.id);
   const idx   = inv.findIndex(it => it.toLowerCase().includes(input));
-  if (idx === -1) return i.reply({ content: "❌ You don't have that item. Check `/inventory`.", ephemeral: true });
+  if (idx === -1) return i.reply({ content: "❌ You don't have that item. Check `/inventory`.", flags: MessageFlags.Ephemeral });
   const itemName = inv[idx];
 
   // Show modal — username only
@@ -878,7 +878,7 @@ async function handleModal(i) {
   const parts        = i.customId.split('_');
   const userId       = parts[2];
   const itemName     = decodeURIComponent(parts.slice(3).join('_'));
-  if (i.user.id !== userId) return i.reply({ content: "❌ This form isn't for you.", ephemeral: true });
+  if (i.user.id !== userId) return i.reply({ content: "❌ This form isn't for you.", flags: MessageFlags.Ephemeral });
 
   const robloxUsername = i.fields.getTextInputValue('roblox_username').trim();
 
@@ -892,7 +892,7 @@ async function handleModal(i) {
         `**Item:** ${itemName}\n**Roblox Username:** ${robloxUsername}\n\n` +
         `**Request ID:** \`#${requestId}\`\n\n> You'll receive a DM when it's done!`
       )],
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 
@@ -901,7 +901,7 @@ async function cmdCheckRedeems(i) {
   const pending = await dbGetPendingRedeems();
   if (!pending.length) return i.reply({
     embeds: [new EmbedBuilder().setColor(0x00ff88).setTitle('✅ No Pending Requests')
-      .setDescription('No pending redemptions right now.')], ephemeral: true,
+      .setDescription('No pending redemptions right now.')], flags: MessageFlags.Ephemeral,
   });
   const embed = new EmbedBuilder().setColor(0x00b4ff).setTitle(`📋 Pending Redemptions (${pending.length})`);
   pending.forEach(r => {
@@ -911,15 +911,15 @@ async function cmdCheckRedeems(i) {
       inline: false,
     });
   });
-  return i.reply({ embeds: [embed], ephemeral: true });
+  return i.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
 
 async function cmdFinishRedeem(i) {
   if (!await guardAdmin(i)) return;
   const requestId = i.options.getInteger('id');
   const request   = await dbGetRedeem(requestId);
-  if (!request) return i.reply({ content: `❌ No redemption found with ID **#${requestId}**.`, ephemeral: true });
-  if (request.status === 'paid') return i.reply({ content: `❌ Request **#${requestId}** is already done.`, ephemeral: true });
+  if (!request) return i.reply({ content: `❌ No redemption found with ID **#${requestId}**.`, flags: MessageFlags.Ephemeral });
+  if (request.status === 'paid') return i.reply({ content: `❌ Request **#${requestId}** is already done.`, flags: MessageFlags.Ephemeral });
   await dbMarkRedeemDone(requestId, i.user.tag);
   try {
     const user = await client.users.fetch(request.userId);
@@ -955,7 +955,7 @@ async function cmdDropCode(i) {
   const minutes = i.options.getInteger('minutes');
   const maxUses = i.options.getInteger('max_uses') ?? 0;
   const channel = i.options.getChannel('channel');
-  if (await dbGetCode(code)) return i.reply({ content: `❌ Code **${code}** already exists.`, ephemeral: true });
+  if (await dbGetCode(code)) return i.reply({ content: `❌ Code **${code}** already exists.`, flags: MessageFlags.Ephemeral });
   const expiresAt = minutes > 0 ? Date.now() + minutes * 60 * 1000 : null;
 
   const announceChannel = await getAnnounceChannel(channel);
@@ -983,7 +983,7 @@ async function cmdDropCode(i) {
     expired: false, announceMessageId, announceChannelId,
   });
 
-  if (announceChannel) return i.reply({ content: `✅ Code **${code}** dropped in <#${announceChannel.id}>!`, ephemeral: true });
+  if (announceChannel) return i.reply({ content: `✅ Code **${code}** dropped in <#${announceChannel.id}>!`, flags: MessageFlags.Ephemeral });
   return i.reply({ embeds: [embed] });
 }
 
@@ -993,7 +993,7 @@ async function cmdMakeCode(i) {
   const reward  = i.options.getInteger('reward');
   const maxUses = i.options.getInteger('max_uses') ?? 0;
   const channel = i.options.getChannel('channel');
-  if (await dbGetCode(code)) return i.reply({ content: `❌ Code **${code}** already exists.`, ephemeral: true });
+  if (await dbGetCode(code)) return i.reply({ content: `❌ Code **${code}** already exists.`, flags: MessageFlags.Ephemeral });
 
   const announceChannel = await getAnnounceChannel(channel);
 
@@ -1019,7 +1019,7 @@ async function cmdMakeCode(i) {
     expired: false, announceMessageId, announceChannelId,
   });
 
-  if (announceChannel) return i.reply({ content: `✅ Permanent code **${code}** created in <#${announceChannel.id}>!`, ephemeral: true });
+  if (announceChannel) return i.reply({ content: `✅ Permanent code **${code}** created in <#${announceChannel.id}>!`, flags: MessageFlags.Ephemeral });
   return i.reply({ embeds: [embed] });
 }
 
@@ -1028,23 +1028,23 @@ async function cmdRemoveCode(i) {
   const code    = i.options.getString('code').toUpperCase().trim();
   const channel = i.options.getChannel('channel');
   const existing = await dbGetCode(code);
-  if (!existing) return i.reply({ content: `❌ No code **${code}** found.`, ephemeral: true });
+  if (!existing) return i.reply({ content: `❌ No code **${code}** found.`, flags: MessageFlags.Ephemeral });
   await dbRemoveCode(code);
   const embed = new EmbedBuilder().setColor(0xff4444).setTitle('🗑️ Code Removed')
     .setDescription(`Code **\`${code}\`** has been removed.\nIt was used **${existing.uses}** time(s).`);
   const announceChannel = await getAnnounceChannel(channel);
-  if (announceChannel) { await announceChannel.send({ embeds: [embed] }); return i.reply({ content: `✅ Announced in <#${announceChannel.id}>.`, ephemeral: true }); }
+  if (announceChannel) { await announceChannel.send({ embeds: [embed] }); return i.reply({ content: `✅ Announced in <#${announceChannel.id}>.`, flags: MessageFlags.Ephemeral }); }
   return i.reply({ embeds: [embed] });
 }
 
 async function cmdRedeemCode(i) {
   const code  = i.options.getString('code').toUpperCase().trim();
   const entry = await dbGetCode(code);
-  if (!entry)                                          return i.reply({ content: '❌ Invalid code.', ephemeral: true });
-  if (entry.expired)                                   return i.reply({ content: '❌ This code has expired.', ephemeral: true });
-  if (entry.expiresAt && Date.now() > entry.expiresAt) return i.reply({ content: '❌ This code has expired.', ephemeral: true });
-  if (entry.maxUses > 0 && entry.uses >= entry.maxUses) return i.reply({ content: '❌ This code has reached its maximum uses.', ephemeral: true });
-  if (entry.usedBy.includes(i.user.id))                return i.reply({ content: '❌ You have already redeemed this code.', ephemeral: true });
+  if (!entry)                                          return i.reply({ content: '❌ Invalid code.', flags: MessageFlags.Ephemeral });
+  if (entry.expired)                                   return i.reply({ content: '❌ This code has expired.', flags: MessageFlags.Ephemeral });
+  if (entry.expiresAt && Date.now() > entry.expiresAt) return i.reply({ content: '❌ This code has expired.', flags: MessageFlags.Ephemeral });
+  if (entry.maxUses > 0 && entry.uses >= entry.maxUses) return i.reply({ content: '❌ This code has reached its maximum uses.', flags: MessageFlags.Ephemeral });
+  if (entry.usedBy.includes(i.user.id))                return i.reply({ content: '❌ You have already redeemed this code.', flags: MessageFlags.Ephemeral });
 
   await dbRedeemCode(code, i.user.id);
   await dbAddCoins(i.user.id, i.user.username, entry.reward);
@@ -1073,7 +1073,7 @@ async function cmdRedeemCode(i) {
   return i.reply({
     embeds: [new EmbedBuilder().setColor(0x00ff88).setTitle('🎉 Code Redeemed!')
       .setDescription(`You redeemed **\`${code}\`**!\n\nYou received ${fmt(entry.reward)}\n💰 New balance: ${fmt(newBal)}`)],
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 
@@ -1081,7 +1081,7 @@ async function cmdCodes(i) {
   if (!await guardAdmin(i)) return;
   const codes = await dbGetAllCodes();
   const active = codes.filter(c => !c.expired);
-  if (!active.length) return i.reply({ content: '📭 No active codes.', ephemeral: true });
+  if (!active.length) return i.reply({ content: '📭 No active codes.', flags: MessageFlags.Ephemeral });
   const embed = new EmbedBuilder().setColor(0x7289da).setTitle('🎟️ All Active Codes');
   active.forEach(c => {
     const expiry = c.expiresAt ? `<t:${Math.floor(c.expiresAt / 1000)}:R> (<t:${Math.floor(c.expiresAt / 1000)}:F>)` : 'Never';
@@ -1092,7 +1092,7 @@ async function cmdCodes(i) {
       inline: false,
     });
   });
-  return i.reply({ embeds: [embed], ephemeral: true });
+  return i.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
 
 async function cmdSetCodeChannel(i) {
@@ -1151,12 +1151,12 @@ async function cmdShowStock(i) {
   const embed    = buildStockEmbed(amount, i.user);
   const existing = await dbGetStockMsg(channel.id);
   if (existing) {
-    try { const msg = await channel.messages.fetch(existing); await msg.edit({ embeds: [embed] }); return i.reply({ content: `✅ Stock updated in <#${channel.id}> → **${amount.toLocaleString()}**`, ephemeral: true }); }
+    try { const msg = await channel.messages.fetch(existing); await msg.edit({ embeds: [embed] }); return i.reply({ content: `✅ Stock updated in <#${channel.id}> → **${amount.toLocaleString()}**`, flags: MessageFlags.Ephemeral }); }
     catch { /* post fresh */ }
   }
   const msg = await channel.send({ embeds: [embed] });
   await dbSetStockMsg(channel.id, msg.id);
-  return i.reply({ content: `✅ Stock embed posted in <#${channel.id}> → **${amount.toLocaleString()}**`, ephemeral: true });
+  return i.reply({ content: `✅ Stock embed posted in <#${channel.id}> → **${amount.toLocaleString()}**`, flags: MessageFlags.Ephemeral });
 }
 
 async function cmdSetStock(i) {
@@ -1164,14 +1164,14 @@ async function cmdSetStock(i) {
   const channel  = i.options.getChannel('channel');
   const amount   = i.options.getInteger('amount');
   const existing = await dbGetStockMsg(channel.id);
-  if (!existing) return i.reply({ content: `❌ No stock embed in <#${channel.id}>. Use \`/show-stock\` first.`, ephemeral: true });
+  if (!existing) return i.reply({ content: `❌ No stock embed in <#${channel.id}>. Use \`/show-stock\` first.`, flags: MessageFlags.Ephemeral });
   try {
     const msg = await channel.messages.fetch(existing);
     await msg.edit({ embeds: [buildStockEmbed(amount, i.user)] });
-    return i.reply({ content: `✅ Stock updated → **${amount.toLocaleString()}** in <#${channel.id}>`, ephemeral: true });
+    return i.reply({ content: `✅ Stock updated → **${amount.toLocaleString()}** in <#${channel.id}>`, flags: MessageFlags.Ephemeral });
   } catch {
     await dbSetStockMsg(channel.id, null);
-    return i.reply({ content: `❌ Embed not found. Use \`/show-stock\` to post a new one.`, ephemeral: true });
+    return i.reply({ content: `❌ Embed not found. Use \`/show-stock\` to post a new one.`, flags: MessageFlags.Ephemeral });
   }
 }
 
@@ -1246,7 +1246,7 @@ async function cmdRemoveItem(i) {
   if (!await guardAdmin(i)) return;
   const name = i.options.getString('name');
   const ok   = await dbRemoveShopItem(name);
-  if (!ok) return i.reply({ content: '❌ Item not found.', ephemeral: true });
+  if (!ok) return i.reply({ content: '❌ Item not found.', flags: MessageFlags.Ephemeral });
   return i.reply({ embeds: [adminEmbed(`✅ Removed **${name}** from the shop`)] });
 }
 
@@ -1308,9 +1308,9 @@ async function cmdTimeout(i) {
   const target  = i.options.getMember('user');
   const minutes = i.options.getInteger('minutes');
   const reason  = i.options.getString('reason') || 'No reason provided';
-  if (!target) return i.reply({ content: '❌ User not found.', ephemeral: true });
-  if (target.id === i.user.id) return i.reply({ content: "❌ Can't timeout yourself.", ephemeral: true });
-  if (!target.moderatable) return i.reply({ content: '❌ I cannot timeout this user.', ephemeral: true });
+  if (!target) return i.reply({ content: '❌ User not found.', flags: MessageFlags.Ephemeral });
+  if (target.id === i.user.id) return i.reply({ content: "❌ Can't timeout yourself.", flags: MessageFlags.Ephemeral });
+  if (!target.moderatable) return i.reply({ content: '❌ I cannot timeout this user.', flags: MessageFlags.Ephemeral });
   await target.timeout(minutes * 60 * 1000, reason);
   const unmuteTs = Math.floor((Date.now() + minutes * 60 * 1000) / 1000);
   return i.reply({ embeds: [modEmbed('🔇 User Timed Out', `**User:** ${target.user.tag}\n**Duration:** ${minutes} minute(s)\n**Expires:** <t:${unmuteTs}:R> \u2014 <t:${unmuteTs}:F>\n**Reason:** ${reason}\n**By:** ${i.user.tag}`, 0xff8800)] });
@@ -1319,7 +1319,7 @@ async function cmdTimeout(i) {
 async function cmdUntimeout(i) {
   if (!await guardAdmin(i)) return;
   const target = i.options.getMember('user');
-  if (!target) return i.reply({ content: '❌ User not found.', ephemeral: true });
+  if (!target) return i.reply({ content: '❌ User not found.', flags: MessageFlags.Ephemeral });
   await target.timeout(null);
   return i.reply({ embeds: [modEmbed('🔊 Timeout Removed', `**User:** ${target.user.tag}\n**By:** ${i.user.tag}`, 0x00ff88)] });
 }
@@ -1328,8 +1328,8 @@ async function cmdKick(i) {
   if (!await guardAdmin(i)) return;
   const target = i.options.getMember('user');
   const reason = i.options.getString('reason') || 'No reason provided';
-  if (!target) return i.reply({ content: '❌ User not found.', ephemeral: true });
-  if (!target.kickable) return i.reply({ content: "❌ I can't kick this user.", ephemeral: true });
+  if (!target) return i.reply({ content: '❌ User not found.', flags: MessageFlags.Ephemeral });
+  if (!target.kickable) return i.reply({ content: "❌ I can't kick this user.", flags: MessageFlags.Ephemeral });
   try { await target.user.send({ embeds: [new EmbedBuilder().setColor(0xff4444).setTitle(`👢 You were kicked from ${i.guild.name}`).setDescription(`**Reason:** ${reason}`)] }); } catch { /* DMs closed */ }
   await target.kick(reason);
   return i.reply({ embeds: [modEmbed('👢 User Kicked', `**User:** ${target.user.tag}\n**Reason:** ${reason}\n**By:** ${i.user.tag}`, 0xff4444)] });
@@ -1340,8 +1340,8 @@ async function cmdBan(i) {
   const target  = i.options.getMember('user');
   const reason  = i.options.getString('reason') || 'No reason provided';
   const delDays = i.options.getInteger('delete_days') ?? 0;
-  if (!target) return i.reply({ content: '❌ User not found.', ephemeral: true });
-  if (!target.bannable) return i.reply({ content: "❌ I can't ban this user.", ephemeral: true });
+  if (!target) return i.reply({ content: '❌ User not found.', flags: MessageFlags.Ephemeral });
+  if (!target.bannable) return i.reply({ content: "❌ I can't ban this user.", flags: MessageFlags.Ephemeral });
   try { await target.user.send({ embeds: [new EmbedBuilder().setColor(0xff0000).setTitle(`🔨 You were banned from ${i.guild.name}`).setDescription(`**Reason:** ${reason}`)] }); } catch { /* DMs closed */ }
   await target.ban({ reason, deleteMessageDays: delDays });
   return i.reply({ embeds: [modEmbed('🔨 User Banned', `**User:** ${target.user.tag}\n**Reason:** ${reason}\n**Msgs deleted:** ${delDays}d\n**By:** ${i.user.tag}`, 0xff0000)] });
@@ -1354,14 +1354,14 @@ async function cmdUnban(i) {
   try {
     await i.guild.members.unban(userId, reason);
     return i.reply({ embeds: [modEmbed('✅ User Unbanned', `**User ID:** ${userId}\n**Reason:** ${reason}\n**By:** ${i.user.tag}`, 0x00ff88)] });
-  } catch { return i.reply({ content: "❌ Couldn't unban — invalid ID or user isn't banned.", ephemeral: true }); }
+  } catch { return i.reply({ content: "❌ Couldn't unban — invalid ID or user isn't banned.", flags: MessageFlags.Ephemeral }); }
 }
 
 async function cmdPurge(i) {
   if (!await guardAdmin(i)) return;
   const amount = i.options.getInteger('amount');
   const filter = i.options.getUser('user');
-  await i.deferReply({ ephemeral: true });
+  await i.deferReply({ flags: MessageFlags.Ephemeral });
   let messages = await i.channel.messages.fetch({ limit: 100 });
   if (filter) messages = messages.filter(m => m.author.id === filter.id);
   const toDelete = [...messages.values()].slice(0, amount).filter(m => Date.now() - m.createdTimestamp < 14 * 24 * 60 * 60 * 1000);
@@ -1404,7 +1404,7 @@ async function cmdAnnounce(i) {
     embeds: [new EmbedBuilder().setColor(color).setTitle(`📢 ${title}`).setDescription(message)
       .setFooter({ text: `Announced by ${i.user.username}` })],
   });
-  return i.reply({ content: `✅ Announcement sent to <#${channel.id}>`, ephemeral: true });
+  return i.reply({ content: `✅ Announcement sent to <#${channel.id}>`, flags: MessageFlags.Ephemeral });
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1440,7 +1440,7 @@ async function cmdAdminHelp(i) {
         { name: '🔨 Moderation', inline: false, value: ['`/warn` `/warnings` `/clearwarnings`', '`/timeout` `/untimeout`', '`/kick` `/ban` `/unban`', '`/purge` `/slowmode` `/lock` `/unlock` `/announce`'].join('\n') },
       )
       .setFooter({ text: 'Admin Perm role or Administrator permission required' })],
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 
@@ -1620,13 +1620,13 @@ async function cmdAdminTutorial(i) {
         )
         .setFooter({ text: 'Role names are case-insensitive • Admin Perm | Owner | Co Owner | Verified' }),
     ],
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 
 async function cmdOwnerTutorial(i) {
   if (i.user.username.toLowerCase() !== 'kosai06913') {
-    return i.reply({ content: '❌ This command is only available to the bot owner.', ephemeral: true });
+    return i.reply({ content: '❌ This command is only available to the bot owner.', flags: MessageFlags.Ephemeral });
   }
 
   const pages = [
@@ -1964,9 +1964,9 @@ async function cmdOwnerTutorial(i) {
   ];
 
   // Send all 6 pages
-  await i.reply({ embeds: [pages[0]], ephemeral: true });
+  await i.reply({ embeds: [pages[0]], flags: MessageFlags.Ephemeral });
   for (let idx = 1; idx < pages.length; idx++) {
-    await i.followUp({ embeds: [pages[idx]], ephemeral: true });
+    await i.followUp({ embeds: [pages[idx]], flags: MessageFlags.Ephemeral });
   }
 }
 
@@ -2001,7 +2001,7 @@ function handStr(h) { return h.map(c => c.display).join(' '); }
 // ══════════════════════════════════════════════════════════════════
 //  BOOT
 // ══════════════════════════════════════════════════════════════════
-client.once('ready', async () => {
+client.once('clientReady', async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
   await loadDB(); // warm up cache
   await registerCommands();
