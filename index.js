@@ -1454,8 +1454,7 @@ async function cmdTutorial(i) {
       new EmbedBuilder()
         .setColor(0x5865f2)
         .setTitle('📖 Bot Tutorial — Getting Started')
-        .setDescription('Welcome! Here\'s everything you need to know to get started.
-​')
+        .setDescription('Welcome! Here\'s everything you need to know to get started.\n​')
         .addFields(
           {
             name: '🪙 Step 1 — Earn Coins',
@@ -1463,8 +1462,7 @@ async function cmdTutorial(i) {
               'Simply **send messages** in any channel — every message gives you **1 coin** automatically.',
               'You can also use `/daily` once every 24 hours to claim **100 free coins**.',
               'Use `/balance` at any time to check how many coins you have.',
-            ].join('
-'),
+            ].join('\n'),
             inline: false,
           },
           {
@@ -1473,8 +1471,7 @@ async function cmdTutorial(i) {
               'Use `/shop` to see all available items and their prices.',
               'Once you have enough coins, use `/buy <item name>` to purchase it.',
               'Your purchased items will appear in `/inventory`.',
-            ].join('
-'),
+            ].join('\n'),
             inline: false,
           },
           {
@@ -1484,8 +1481,7 @@ async function cmdTutorial(i) {
               'A form will pop up asking for your **Roblox Username**.',
               'Fill it in and submit — staff will process your request and DM you when done.',
               'You can check your request status by asking staff.',
-            ].join('
-'),
+            ].join('\n'),
             inline: false,
           },
           {
@@ -1495,8 +1491,7 @@ async function cmdTutorial(i) {
               '`/slots <bet>` — Spin the slots for up to **20× your bet** on a jackpot!',
               '`/blackjack <bet>` — Play Blackjack with Hit, Stand, and Double Down.',
               '⚠️ Only bet what you can afford to lose!',
-            ].join('
-'),
+            ].join('\n'),
             inline: false,
           },
           {
@@ -1505,8 +1500,7 @@ async function cmdTutorial(i) {
               'Staff sometimes drop codes in the server.',
               'Use `/redeem-code <code>` to claim free coins.',
               'Each code can only be redeemed **once per person**.',
-            ].join('
-'),
+            ].join('\n'),
             inline: false,
           },
           {
@@ -1514,8 +1508,7 @@ async function cmdTutorial(i) {
             value: [
               'If you have the **Verified** role, you can send coins to others.',
               'Use `/pay <@user> <amount>` to transfer coins.',
-            ].join('
-'),
+            ].join('\n'),
             inline: false,
           },
           {
@@ -1525,8 +1518,7 @@ async function cmdTutorial(i) {
               '`/userinfo [user]` — View info about yourself or someone else',
               '`/serverinfo` — View server stats',
               '`/help` — Full command list',
-            ].join('
-'),
+            ].join('\n'),
             inline: false,
           },
         )
@@ -1541,8 +1533,7 @@ async function cmdAdminTutorial(i) {
       new EmbedBuilder()
         .setColor(0xff4444)
         .setTitle('🔧 Admin Setup Tutorial')
-        .setDescription('How to set up admin roles and use admin commands.
-​')
+        .setDescription('How to set up admin roles and use admin commands.\n​')
         .addFields(
           {
             name: '👑 Step 1 — Create the Admin Role',
@@ -1553,8 +1544,7 @@ async function cmdAdminTutorial(i) {
               '> ⚠️ The name must be exactly `Admin Perm` (case-insensitive) for the bot to recognise it.',
               '4. Give the role whatever Discord permissions you want (e.g. Manage Messages, Kick Members etc.)',
               '5. Click **Save Changes**',
-            ].join('
-'),
+            ].join('\n'),
             inline: false,
           },
           {
@@ -1566,8 +1556,7 @@ async function cmdAdminTutorial(i) {
               'That member can now use all admin bot commands.',
               '',
               '> Alternatively: users with Discord\'s built-in **Administrator** permission also get full access automatically.',
-            ].join('
-'),
+            ].join('\n'),
             inline: false,
           },
           {
@@ -1576,8 +1565,7 @@ async function cmdAdminTutorial(i) {
               'Create a role named exactly **`Owner`** or **`Co Owner`** (or `Co-Owner`).',
               'Members with this role can use `/givecoin` and `/removecoin`.',
               'These are separate from the Admin Perm role — you can have both.',
-            ].join('
-'),
+            ].join('\n'),
             inline: false,
           },
           {
@@ -1586,8 +1574,7 @@ async function cmdAdminTutorial(i) {
               'Create a role named exactly **`Verified`**.',
               'Only members with this role can use `/pay` to send coins to others.',
               'This prevents random users from transferring coins freely.',
-            ].join('
-'),
+            ].join('\n'),
             inline: false,
           },
           {
@@ -1596,8 +1583,7 @@ async function cmdAdminTutorial(i) {
               'Use `/set-code-channel <#channel>` to set a default channel for code drops.',
               'When you use `/drop-code` or `/make-code`, the bot will announce there by default.',
               'You can override it per-command with the optional `channel` argument.',
-            ].join('
-'),
+            ].join('\n'),
             inline: false,
           },
           {
@@ -1607,8 +1593,7 @@ async function cmdAdminTutorial(i) {
               '`/removeitem <name>` — Remove an item',
               '`/giveitem <user> <item>` — Give an item directly to someone',
               'The default shop packages (125m Brainrot etc.) are always there and cannot be removed.',
-            ].join('
-'),
+            ].join('\n'),
             inline: false,
           },
           {
@@ -1618,8 +1603,7 @@ async function cmdAdminTutorial(i) {
               'Use `/check-redeems` to see all pending requests.',
               'Once you\'ve sent the item, use `/finish-redeem <id>` to mark it as done.',
               'The bot will automatically **DM the user** to let them know it\'s been processed.',
-            ].join('
-'),
+            ].join('\n'),
             inline: false,
           },
           {
@@ -1630,8 +1614,7 @@ async function cmdAdminTutorial(i) {
               '`/set-stock <#channel> <amount>` — Update the stock embed',
               '`/drop-code <code> <reward> <minutes>` — Drop a timed code',
               '`/adminhelp` — Full list of every admin command',
-            ].join('
-'),
+            ].join('\n'),
             inline: false,
           },
         )
@@ -1650,8 +1633,7 @@ async function cmdOwnerTutorial(i) {
     new EmbedBuilder()
       .setColor(0xffd700)
       .setTitle('📖 Full Bot Guide — Page 1/6 — Roles Setup')
-      .setDescription('Everything you need to know to run this bot. Only you can see this.
-​')
+      .setDescription('Everything you need to know to run this bot. Only you can see this.\n​')
       .addFields(
         {
           name: '👑 Owner / Co-Owner Role',
@@ -1661,15 +1643,14 @@ async function cmdOwnerTutorial(i) {
             '• `/givecoin <user> <amount>` — Add coins to anyone',
             '• `/removecoin <user> <amount>` — Remove coins from anyone',
             '> These are the most powerful economy commands — only give this role to people you 100% trust.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
           name: '🔧 Admin Perm Role',
           value: [
             'Create a role named **`Admin Perm`** (exact name, case-insensitive).',
-            'Members with this role (or Discord's built-in Administrator permission) can use ALL admin commands:',
+            'Members with this role (or Discord\'s built-in Administrator permission) can use ALL admin commands:',
             '• `/check-redeems` — View pending redemptions',
             '• `/finish-redeem <id>` — Mark redemption done + DM user',
             '• `/drop-code` `/make-code` `/remove-code` `/codes`',
@@ -1677,8 +1658,7 @@ async function cmdOwnerTutorial(i) {
             '• `/warn` `/kick` `/ban` `/timeout` `/purge` `/lock` `/slowmode` etc.',
             '• `/additem` `/removeitem` `/giveitem` `/clearinventory`',
             '• `/setcoins` `/resetdaily` `/adminhelp`',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1688,8 +1668,7 @@ async function cmdOwnerTutorial(i) {
             'Only members with this role can use `/pay <user> <amount>` to send coins to others.',
             'Without this role, `/pay` will be blocked.',
             '> This prevents random unverified users from moving coins around.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1701,8 +1680,7 @@ async function cmdOwnerTutorial(i) {
             '• `Co Owner` or `Co-Owner` → givecoin / removecoin',
             '• `Verified` → /pay',
             'You can have multiple roles that qualify — e.g. someone can have both Owner and Admin Perm.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
       )
@@ -1719,17 +1697,15 @@ async function cmdOwnerTutorial(i) {
             '**Daily:** `/daily` gives **100 coins** every 24 hours. The bot shows a Discord timestamp for when the next daily is available.',
             '**Codes:** Staff can drop codes that give coins — users claim them with `/redeem-code <code>`.',
             '**Admin add:** `/givecoin <user> <amount>` adds coins directly (Owner/Co-Owner only).',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
           name: '💰 Balance & Leaderboard',
           value: [
-            '`/balance [user]` — Check your own or anyone else's coin balance.',
+            '`/balance [user]` — Check your own or anyone else\'s coin balance.',
             '`/leaderboard` — Shows the top 10 richest users in the server.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1738,8 +1714,7 @@ async function cmdOwnerTutorial(i) {
             '`/pay <user> <amount>` — Send coins to another user.',
             '> Only works if the sender has the **Verified** role.',
             '> Cannot pay yourself or bots.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1748,9 +1723,8 @@ async function cmdOwnerTutorial(i) {
             '`/givecoin <user> <amount>` — Add coins [Owner/Co-Owner only]',
             '`/removecoin <user> <amount>` — Remove coins [Owner/Co-Owner only]',
             '`/setcoins <user> <amount>` — Set exact balance [Admin]',
-            '`/resetdaily <user>` — Reset someone's daily cooldown [Admin]',
-          ].join('
-'),
+            '`/resetdaily <user>` — Reset someone\'s daily cooldown [Admin]',
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1760,8 +1734,7 @@ async function cmdOwnerTutorial(i) {
             'This means data persists even when Railway restarts the bot.',
             'You need `JSONBIN_BIN_ID` and `JSONBIN_API_KEY` in your Railway env vars.',
             'Initial bin content: `{"users":{},"warnings":{},"codes":{},"shopItems":[],"stockMessages":{},"codeChannel":null,"redeems":{},"redeemCounter":1}`',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
       )
@@ -1781,8 +1754,7 @@ async function cmdOwnerTutorial(i) {
             '• **200m Brainrot** — 3,000 coins',
             '• **100m Garama** — 5,000 coins',
             'Users buy with `/buy <item name>` — it goes to their `/inventory`.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1791,10 +1763,9 @@ async function cmdOwnerTutorial(i) {
             '`/additem <name> <price> <description> [emoji] [stock]` — Add a custom item.',
             '`/removeitem <name>` — Remove a custom item.',
             '`/giveitem <user> <item>` — Give an item directly without purchase.',
-            '`/clearinventory <user>` — Wipe someone's entire inventory.',
+            '`/clearinventory <user>` — Wipe someone\'s entire inventory.',
             '> Stock of `-1` means unlimited.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1807,8 +1778,7 @@ async function cmdOwnerTutorial(i) {
             '**5.** You (admin) run `/check-redeems` to see all pending requests.',
             '**6.** After sending the item in-game, run `/finish-redeem <id>`.',
             '**7.** Bot marks it done and **DMs the user** automatically to confirm.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1819,8 +1789,7 @@ async function cmdOwnerTutorial(i) {
             '• Their Roblox username',
             '• Item they bought',
             '> Only pending (not yet processed) requests appear.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
       )
@@ -1837,8 +1806,7 @@ async function cmdOwnerTutorial(i) {
             '**Each user can only redeem each code once.**',
             'Once a code expires (by time or max uses), the announcement message in the channel automatically updates to show ❌ Expired.',
             'The check runs every 30 seconds.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1851,8 +1819,7 @@ async function cmdOwnerTutorial(i) {
             '• `channel` — Where to announce it (overrides default channel)',
             '• `max_uses` — Max total redemptions (0 = unlimited)',
             '> The code is shown as a spoiler `||CODE||` in the announcement.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1861,8 +1828,7 @@ async function cmdOwnerTutorial(i) {
             '`/make-code <code> <reward> [channel] [max_uses]`',
             'Same as drop-code but never expires by time.',
             'Still expires if max_uses is hit.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1871,8 +1837,7 @@ async function cmdOwnerTutorial(i) {
             '`/remove-code <code> [channel]`',
             'Removes the code from the database immediately.',
             'Optionally announces the removal in a channel.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1881,8 +1846,7 @@ async function cmdOwnerTutorial(i) {
             '`/set-code-channel <#channel>` — Sets the default channel for all code announcements.',
             'You can override it per command with the optional `channel` argument.',
             '`/codes` — Lists all currently active codes (admin only).',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
       )
@@ -1898,8 +1862,7 @@ async function cmdOwnerTutorial(i) {
             '`/coinflip <heads|tails> <bet>`',
             '50/50 chance. Win = get your bet back + same amount (2× total).',
             'Lose = lose your bet.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1913,8 +1876,7 @@ async function cmdOwnerTutorial(i) {
             '• Three of anything else → 3×',
             '• Two of a kind → 1.5×',
             '• No match → lose bet',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1926,8 +1888,7 @@ async function cmdOwnerTutorial(i) {
             '• Beat dealer → win 2×',
             '• Push (tie) → bet returned',
             '• Bust or dealer wins → lose bet',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1936,8 +1897,7 @@ async function cmdOwnerTutorial(i) {
             '`/show-stock <#channel> <amount>` — Posts a live stock embed. Shows 🟢 IN STOCK, 🟡 LOW STOCK, or 🔴 OUT OF STOCK.',
             '`/set-stock <#channel> <amount>` — Updates the existing embed with a new amount.',
             '> The embed is stored by channel ID so it always edits the same message.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
       )
@@ -1963,8 +1923,7 @@ async function cmdOwnerTutorial(i) {
             '`/lock [#channel] [reason]` — Prevent @everyone from sending messages.',
             '`/unlock [#channel]` — Re-enable sending.',
             '`/announce <#channel> <title> <message> [color]` — Send a formatted embed announcement.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1972,11 +1931,10 @@ async function cmdOwnerTutorial(i) {
           value: [
             'You need these set in Railway (no .env file needed on Railway):',
             '• `DISCORD_TOKEN` — Your bot token from Discord Developer Portal',
-            '• `CLIENT_ID` — Your application's client ID',
+            '• `CLIENT_ID` — Your application\'s client ID',
             '• `JSONBIN_BIN_ID` — The bin ID from jsonbin.io',
             '• `JSONBIN_API_KEY` — Your JSONBin secret key ($2a$10$...)',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1987,8 +1945,7 @@ async function cmdOwnerTutorial(i) {
             '2. Clears ALL old guild (server) commands',
             '3. Registers fresh commands per guild (instant, no 1hr wait)',
             '> This prevents duplicate commands showing up.',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
         {
@@ -1999,8 +1956,7 @@ async function cmdOwnerTutorial(i) {
             '`/tutorial` — General bot guide for regular users',
             '`/admin-tutorial` — Role setup guide for admins (ephemeral)',
             '`/owner-tutorial` — This full guide (only you, kosai06913)',
-          ].join('
-'),
+          ].join('\n'),
           inline: false,
         },
       )
